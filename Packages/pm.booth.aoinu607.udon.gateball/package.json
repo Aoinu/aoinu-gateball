@@ -1,0 +1,26 @@
+{
+  "name": "pm.booth.aoinu607.udon.gateball",
+  "displayName": "Aoinu Gateball",
+  "version": "0.1.0",
+  "unity": "2022.3",
+  "description": "A VRChat gateball gimmick with a VPM package workflow.",
+  "url": "https://github.com/Aoinu/aoinu-gateball/releases/download/0.1.0/pm.booth.aoinu607.udon.gateball-0.1.0.zip",
+  "changelogUrl": "https://github.com/Aoinu/aoinu-gateball/blob/main/CHANGELOG.md",
+  "documentationUrl": "https://github.com/Aoinu/aoinu-gateball/blob/main/README.md",
+  "license": "MIT",
+  "author": {
+    "name": "Aoinu",
+    "email": "aoinu@users.noreply.github.com",
+    "url": "https://github.com/Aoinu/aoinu-gateball"
+  },
+  "vpmDependencies": {
+    "com.vrchat.worlds": "3.10.x"
+  },
+  "samples": [
+    {
+      "displayName": "Gateball Sample Notes",
+      "description": "Development notes for the optional gateball sample content.",
+      "path": "Samples~/Gateball"
+    }
+  ]
+}

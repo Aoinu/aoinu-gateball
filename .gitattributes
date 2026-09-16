@@ -1,0 +1,12 @@
+*.asset filter=vrc eol=lf text=auto git-vrc-filter-version=1
+*.prefab filter=vrc eol=lf text=auto git-vrc-filter-version=1
+*.unity filter=vrc eol=lf text=auto git-vrc-filter-version=1
+*.meta eol=lf text=auto
+*.cs eol=lf text=auto
+*.json eol=lf text=auto
+*.md eol=lf text=auto
+*.yml eol=lf text=auto
+*.yaml eol=lf text=auto
+
+# Legacy TextMesh Pro sample prefab is incompatible with git-vrc 0.1.0.
+"Assets/TextMesh Pro/Examples & Extras/Prefabs/Text Popup.prefab" -filter

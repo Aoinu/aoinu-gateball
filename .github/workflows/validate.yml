@@ -1,0 +1,59 @@
+name: Validate Repository
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  metadata:
+    name: Validate package metadata
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3df4ab11eba7bda6032a0b82a6bb43b11571feac
+
+      - name: Install git-vrc 0.1.0
+        run: cargo install --locked --git https://github.com/anatawa12/git-vrc.git --tag v0.1.0 git-vrc
+
+      - name: Enable git-vrc filter
+        run: git config --local include.path ../.gitconfig
+
+      - name: Validate package files
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const packageId = 'pm.booth.aoinu607.udon.gateball';
+          const packagePath = `Packages/${packageId}`;
+          const pkg = JSON.parse(fs.readFileSync(`${packagePath}/package.json`, 'utf8'));
+          const required = ['name', 'displayName', 'version', 'unity', 'description', 'url', 'license', 'author'];
+          for (const key of required) {
+            if (!(key in pkg)) throw new Error(`Missing package field: ${key}`);
+          }
+          if (pkg.name !== packageId) throw new Error('Package name does not match its directory');
+          if (pkg.version !== '0.1.0') throw new Error('Unexpected initial package version');
+          if (pkg.unity !== '2022.3') throw new Error('Unexpected Unity version range');
+          if (pkg.author.email !== 'aoinu@users.noreply.github.com') throw new Error('Unexpected public author email');
+          if (!pkg.vpmDependencies || !pkg.vpmDependencies['com.vrchat.worlds']) throw new Error('Missing VRChat Worlds dependency');
+          for (const file of [
+            `${packagePath}/Runtime/Pm.Booth.Aoinu607.Udon.Gateball.asmdef`,
+            `${packagePath}/Tests~/Pm.Booth.Aoinu607.Udon.Gateball.Tests.asmdef`,
+            '.gitattributes',
+            '.gitconfig'
+          ]) {
+            if (!fs.existsSync(file)) throw new Error(`Missing required file: ${file}`);
+          }
+          console.log(`Validated ${pkg.name} ${pkg.version}`);
+          NODE
+
+      - name: Check for credential signatures
+        shell: bash
+        run: |
+          if git grep -n -I -E -- '-----BEGIN (RSA|OPENSSH|EC|DSA|PGP) PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{20,}|github_pat_[A-Za-z0-9_]{20,}|xox[baprs]-[A-Za-z0-9-]{20,}'; then
+            echo 'Credential-like content detected in tracked files.'
+            exit 1
+          fi

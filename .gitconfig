@@ -1,0 +1,4 @@
+[filter "vrc"]
+    clean = git vrc clean --file %f
+    smudge = git vrc smudge --file %f
+    required = true
