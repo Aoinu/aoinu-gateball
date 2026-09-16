@@ -1,18 +1,17 @@
 # Repository Guidelines
 
-This repository is the Unity 2022.3.22f1 development project and embedded VPM package for a VRChat gateball prototype. Keep public files, comments, documentation, and commit messages free of personal information and inappropriate language.
+This repository is the Unity 2022.3.22f1 development project and embedded VPM package for the VRChat v0.1 Local Gateball Core. Keep public files, comments, documentation, and commit messages free of personal information and inappropriate language.
 
 ## Project Structure
 
-- `Packages/pm.booth.aoinu607.udon.gateball/` is the distributable package.
-- `Runtime/` contains runtime UdonSharp code under `Pm.Booth.Aoinu607.Udon.Gateball`.
-- `Samples~/` contains optional sample content; `Tests~/` contains package tests.
-- `Assets/` is the development-only world and debug harness. `Assets/SerializedUdonPrograms/` is generated; do not hand-edit it.
+- `Packages/pm.booth.aoinu607.udon.gateball/` is the distributable package; its `Runtime/`, `Tests/Editor`, and `Tests/Runtime` directories contain the runtime and package tests.
+- `Assets/Aoinu Works/Gateball/` contains the development Scene, materials, and debug harness. `Assets/Editor/` contains editor-only builders and test-runner compatibility code.
+- `Assets/SerializedUdonPrograms/` is generated and ignored; do not hand-edit or commit it.
 - `Packages/manifest.json`, `packages-lock.json`, and `vpm-manifest.json` define dependencies. SDK packages and UnityMCP are development dependencies, not package contents.
 
 ## Build, Test, and Development
 
-Open the project with Unity 2022.3.22f1 and wait for imports and UdonSharp compilation to finish. Use **Window > General > Test Runner** for EditMode/PlayMode tests and the VRChat SDK Builder for **Build & Test**. The current GitHub Actions workflow validates metadata and credential signatures; Unity automation is intentionally deferred until a runner is selected.
+Open the project with Unity 2022.3.22f1 and wait for imports and UdonSharp compilation to finish. Use **Aoinu Gateball > Build Development Scene** when regenerating the harness, **Window > General > Test Runner** for EditMode/PlayMode tests, and the VRChat SDK Builder for **Build & Test**. GitHub Actions validates package metadata and credential signatures.
 
 After cloning, install `git-vrc` 0.1.0 or a compatible filter-v1 release, then enable the repository filter:
 
@@ -29,7 +28,7 @@ Use 4 spaces, braces on their own lines, explicit namespaces, PascalCase for typ
 
 ## Testing
 
-Name tests `FeatureNameTests.cs`. Add EditMode and PlayMode coverage for each behavior as implementation proceeds. Physics and VRChat behavior must also be checked in Unity Play Mode and SDK Build & Test; compilation alone is not sufficient.
+Name tests `FeatureNameTests.cs`. Put pure rule/geometry tests in `Packages/pm.booth.aoinu607.udon.gateball/Tests/Editor` and physics tests in `Tests/Runtime`. Run both test assemblies from Unity Test Runner; also check physics and VRChat behavior in Play Mode and SDK Build & Test because compilation alone is not sufficient. `GateballTestRunnerCompatibility.cs` preserves Unity Test Runner callbacks that the installed SDK filter would otherwise strip during PlayMode tests.
 
 ## Commits and Pull Requests
 

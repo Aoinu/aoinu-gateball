@@ -1,0 +1,21 @@
+{
+  "name": "Pm.Booth.Aoinu607.Udon.Gateball.Tests.Runtime",
+  "rootNamespace": "Pm.Booth.Aoinu607.Udon.Gateball.Tests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "Pm.Booth.Aoinu607.Udon.Gateball"
+  ],
+  "includePlatforms": [],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

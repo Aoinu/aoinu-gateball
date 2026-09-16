@@ -30,3 +30,9 @@ Thumbs.db
 # Local tooling and test output
 /TestResults/
 /Artifacts/
+/ClientSimStorage/
+
+# Unity test and UdonSharp generated assets
+/Assets/InitTestScene*.unity
+/Assets/InitTestScene*.unity.meta
+/Assets/SerializedUdonPrograms/

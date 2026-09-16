@@ -1,0 +1,108 @@
+using UdonSharp;
+using UnityEngine;
+using VRC.SDKBase;
+using VRC.Udon.Common;
+
+namespace Pm.Booth.Aoinu607.Udon.Gateball
+{
+    [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
+    public class GateballDesktopController : UdonSharpBehaviour
+    {
+        public GateballStrokeRouter StrokeRouter;
+        public int SelectedBallId = 1;
+        public float AimYawDegrees;
+        public float Power = 2.5f;
+        public float AimSensitivity = 3f;
+        public float PowerSensitivity = 0.08f;
+        public float MinimumPower = 0.2f;
+        public float MaximumPower = 7f;
+
+        public override void InputMoveHorizontal(float value, UdonInputEventArgs args)
+        {
+            if (InputManager.IsUsingHandController())
+            {
+                return;
+            }
+
+            AimYawDegrees += value * AimSensitivity;
+        }
+
+        public override void InputMoveVertical(float value, UdonInputEventArgs args)
+        {
+            if (InputManager.IsUsingHandController())
+            {
+                return;
+            }
+
+            Power = Mathf.Clamp(Power + value * PowerSensitivity, MinimumPower, MaximumPower);
+        }
+
+        public override void InputUse(bool value, UdonInputEventArgs args)
+        {
+            if (!value || InputManager.IsUsingHandController())
+            {
+                return;
+            }
+
+            _Stroke(Power);
+        }
+
+        public override void Interact()
+        {
+            if (!InputManager.IsUsingHandController())
+            {
+                _Stroke(Power);
+            }
+        }
+
+        public void _StrokeWeak()
+        {
+            _Stroke(1.5f);
+        }
+
+        public void _StrokeNormal()
+        {
+            _Stroke(3.5f);
+        }
+
+        public void _StrokeStrong()
+        {
+            _Stroke(6f);
+        }
+
+        public void _NextBall()
+        {
+            SelectedBallId++;
+            if (SelectedBallId > GateballGeometry.BallCount)
+            {
+                SelectedBallId = 1;
+            }
+        }
+
+        public void _PreviousBall()
+        {
+            SelectedBallId--;
+            if (SelectedBallId < 1)
+            {
+                SelectedBallId = GateballGeometry.BallCount;
+            }
+        }
+
+        public void _ResetAimAndPower()
+        {
+            AimYawDegrees = 0f;
+            Power = 2.5f;
+        }
+
+        private void _Stroke(float impulse)
+        {
+            if (StrokeRouter == null)
+            {
+                return;
+            }
+
+            Vector3 direction = Quaternion.AngleAxis(AimYawDegrees, Vector3.up) * Vector3.forward;
+            StrokeRouter._ApplyStrokeById(SelectedBallId, direction, impulse);
+        }
+    }
+}

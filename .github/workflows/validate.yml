@@ -41,7 +41,9 @@ jobs:
           if (!pkg.vpmDependencies || !pkg.vpmDependencies['com.vrchat.worlds']) throw new Error('Missing VRChat Worlds dependency');
           for (const file of [
             `${packagePath}/Runtime/Pm.Booth.Aoinu607.Udon.Gateball.asmdef`,
-            `${packagePath}/Tests~/Pm.Booth.Aoinu607.Udon.Gateball.Tests.asmdef`,
+            `${packagePath}/Runtime/Pm.Booth.Aoinu607.Udon.Gateball.asmdef.asset`,
+            `${packagePath}/Tests/Editor/Pm.Booth.Aoinu607.Udon.Gateball.Tests.Editor.asmdef`,
+            `${packagePath}/Tests/Runtime/Pm.Booth.Aoinu607.Udon.Gateball.Tests.Runtime.asmdef`,
             '.gitattributes',
             '.gitconfig'
           ]) {

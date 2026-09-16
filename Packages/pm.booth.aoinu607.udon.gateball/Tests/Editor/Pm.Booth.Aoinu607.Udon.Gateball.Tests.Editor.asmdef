@@ -1,0 +1,24 @@
+{
+  "name": "Pm.Booth.Aoinu607.Udon.Gateball.Tests.Editor",
+  "rootNamespace": "Pm.Booth.Aoinu607.Udon.Gateball.Tests",
+  "references": [
+    "UnityEngine.TestRunner",
+    "UnityEditor.TestRunner",
+    "Pm.Booth.Aoinu607.Udon.Gateball"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": true,
+  "precompiledReferences": [
+    "nunit.framework.dll"
+  ],
+  "autoReferenced": false,
+  "defineConstraints": [
+    "UNITY_INCLUDE_TESTS"
+  ],
+  "versionDefines": [],
+  "noEngineReferences": false
+}
