@@ -113,6 +113,32 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         }
 
         [Test]
+        public void EventComparisonClassifiesCriticalAndDiagnosticDifferences()
+        {
+            int collision = GateballTelemetry.EncodeEvent(GateballTelemetry.EventBallCollision, 1, 2, -1);
+            int settled = GateballTelemetry.EncodeEvent(GateballTelemetry.EventSettled, 1, -1, -1);
+            int[] owner = { collision, settled };
+            int[] remote = { settled, collision, collision };
+
+            int[] classification = GateballTelemetry.CalculateEventDivergenceClassification(
+                remote,
+                remote.Length,
+                owner,
+                owner.Length);
+
+            Assert.AreEqual(0, classification[GateballTelemetry.EventClassificationMissingRemote]);
+            Assert.AreEqual(1, classification[GateballTelemetry.EventClassificationExtraRemote]);
+            Assert.AreEqual(2, classification[GateballTelemetry.EventClassificationOrderingOnly]);
+            Assert.AreEqual(1, classification[GateballTelemetry.EventClassificationDuplicate]);
+            Assert.AreEqual(0, classification[GateballTelemetry.EventClassificationGameplayCritical]);
+            Assert.GreaterOrEqual(classification[GateballTelemetry.EventClassificationDiagnostic], 2);
+            Assert.AreEqual(GateballTelemetry.EventBallCollision, GateballTelemetry.DecodeEventType(collision));
+            Assert.AreEqual(1, GateballTelemetry.DecodeEventBallId(collision));
+            Assert.AreEqual(2, GateballTelemetry.DecodeEventTargetId(collision));
+            Assert.AreEqual(-1, GateballTelemetry.DecodeEventGateIndex(collision));
+        }
+
+        [Test]
         public void LateJoinAlwaysReconstructsFromAuthoritativeState()
         {
             Assert.IsTrue(GateballNetworkState.ShouldLateJoinUseAuthoritativeState(GateballNetworkState.PhaseWaiting));

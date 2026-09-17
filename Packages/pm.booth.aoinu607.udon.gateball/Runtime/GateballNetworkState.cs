@@ -100,15 +100,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
         }
 
-        private void Update()
-        {
-            if (_initialized)
-            {
-                _TryApplyPendingShotStart();
-                _TryApplyPendingStroke();
-            }
-        }
-
         private void FixedUpdate()
         {
             if (!_initialized)
@@ -356,15 +347,12 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             Debug.Log("[Gateball v0.2] ShotStart shot=" + ShotId.ToString()
                 + " ball=" + StrokeBallId.ToString()
-                + " impulse=" + StrokeImpulse.ToString());
+                + " impulse=" + StrokeImpulse.ToString()
+                + " frame=" + Time.frameCount.ToString()
+                + " fixedDelta=" + Time.fixedDeltaTime.ToString());
 
             _RequestSerializationIfOwner();
-            Court._ApplyBallPositions(InitialBallPositions);
-            if (Telemetry != null)
-            {
-                Telemetry._RecordInitialSample(Court.Balls);
-            }
-            _pendingStrokeApply = true;
+            _pendingShotStart = true;
         }
 
         private void _ApplyShotStart()
@@ -390,7 +378,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             Debug.Log("[Gateball v0.2] RemoteShotStart shot=" + ShotId.ToString()
                 + " ball=" + StrokeBallId.ToString()
-                + " impulse=" + StrokeImpulse.ToString());
+                + " impulse=" + StrokeImpulse.ToString()
+                + " frame=" + Time.frameCount.ToString()
+                + " fixedDelta=" + Time.fixedDeltaTime.ToString());
 
             if (Telemetry != null)
             {
@@ -494,6 +484,16 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + " settleTimeError=" + LastSettleTimeError.ToString()
                 + " settleStepError=" + LastSettleStepError.ToString()
                 + " divergence=" + LastEventDivergenceCount.ToString()
+                + " missingRemote=" + (Telemetry == null ? 0 : Telemetry.MissingRemoteEventCount).ToString()
+                + " extraRemote=" + (Telemetry == null ? 0 : Telemetry.ExtraRemoteEventCount).ToString()
+                + " differentType=" + (Telemetry == null ? 0 : Telemetry.DifferentEventTypeCount).ToString()
+                + " differentBall=" + (Telemetry == null ? 0 : Telemetry.DifferentBallCount).ToString()
+                + " differentTarget=" + (Telemetry == null ? 0 : Telemetry.DifferentTargetCount).ToString()
+                + " differentGate=" + (Telemetry == null ? 0 : Telemetry.DifferentGateCount).ToString()
+                + " orderingOnly=" + (Telemetry == null ? 0 : Telemetry.OrderingOnlyEventDifferenceCount).ToString()
+                + " duplicate=" + (Telemetry == null ? 0 : Telemetry.DuplicateEventDifferenceCount).ToString()
+                + " gameplayCritical=" + (Telemetry == null ? 0 : Telemetry.GameplayCriticalEventDivergenceCount).ToString()
+                + " diagnostic=" + (Telemetry == null ? 0 : Telemetry.DiagnosticEventDivergenceCount).ToString()
                 + " forced=" + ShotEndWasForced.ToString());
         }
 
@@ -524,6 +524,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + " role=" + (_IsLocalOwner() ? "Owner" : "Remote")
                 + " ball=" + StrokeBallId.ToString()
                 + " impulse=" + StrokeImpulse.ToString()
+                + " simulationStep=" + LocalSimulationStep.ToString()
+                + " fixedDelta=" + Time.fixedDeltaTime.ToString()
                 + " velocity=" + strokeBall.Body.velocity.ToString()
                 + " kinematic=" + strokeBall.Body.isKinematic.ToString());
         }
@@ -542,7 +544,26 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             _pendingShotStart = false;
-            _ApplyShotStart();
+            if (_activeLocalShotId == ShotId && _IsLocalOwner())
+            {
+                _ApplyLocalShotStart();
+            }
+            else
+            {
+                _ApplyShotStart();
+            }
+        }
+
+        private void _ApplyLocalShotStart()
+        {
+            Court._ApplyBallPositions(InitialBallPositions);
+            LocalFixedDeltaTime = Time.fixedDeltaTime;
+            if (Telemetry != null)
+            {
+                Telemetry._RecordInitialSample(Court.Balls);
+            }
+
+            _pendingStrokeApply = true;
         }
 
         private void _CopyTelemetrySummary()

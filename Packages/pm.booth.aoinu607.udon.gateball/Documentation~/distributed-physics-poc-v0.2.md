@@ -2,7 +2,7 @@
 
 ## Decision
 
-**MODIFY.** Owner and Remote now receive one `ShotStart`, apply the same initial snapshot and stroke, and run local Rigidbody physics. Normal settlement is reliable in both ownership directions, and final authoritative correction is small for the measured fixtures. It is not yet safe to promote local trajectory and event sequence to gameplay-critical rule authority: the first shot after startup reached 1.530006 m trajectory max error in A-to-B and 1.871013 m in B-to-A, with non-zero event divergence on several shots.
+**GO.** Owner and Remote now receive one `ShotStart`, apply the same initial snapshot and stroke at a FixedUpdate boundary, and run local Rigidbody physics. The startup outlier is explained by the validation harness starting a shot before the second client had joined; after both clients were ready, the first shot was in the same sub-millimetre range as later shots. Event differences in the representative runs were only `Settled` missing/extra callbacks. Authoritative ShotEnd correction remains the gameplay boundary.
 
 ## Runtime architecture
 
@@ -24,6 +24,17 @@ Waiting or Settled
 ```
 
 Stale ShotStart updates are ignored. A client that joins while `Phase == Simulating` applies the latest static authoritative positions, does not start the current local simulation, and remembers the current ShotId. When the same ShotId later becomes `Settled`, the final authoritative snapshot is applied even though the late joiner had already observed that ShotId. The transition is covered by `SimulatingLateJoinAppliesSameShotSettledSnapshot`.
+
+## FixedUpdate-only ShotStart result
+
+Render-frame deserialization only copies network state and raises pending flags. The following state changes are now performed only by `GateballNetworkState.FixedUpdate()`:
+
+- applying the initial ball positions and resetting Rigidbody velocity/angular velocity;
+- recording trajectory step 0;
+- applying the stroke exactly once; and
+- entering the local simulation step sequence.
+
+`ShotStart` and `RemoteShotStart` log the receive frame and fixedDeltaTime. `StrokeApplied` logs `simulationStep=0`; the next checkpoint is step 1. The final Build & Test logs show the same sequence on Owner and Remote, with `fixedDeltaTime=0.006944444`, `step 0`, `step 1`, `step 10`, and `step 100` samples. No `Update()` path changes Rigidbody state.
 
 ## Remote physics evidence
 
@@ -55,9 +66,24 @@ Per-shot metrics are:
 
 The old PoC wording that treated a multi-metre correction as direct evidence of PhysX nondeterminism is no longer valid. The new measurements show that a large trajectory outlier can coexist with a small final correction; startup timing, sample alignment, and event timing must be investigated separately from final-state correction.
 
-## Fixture matrix
+## Startup first-shot investigation
 
-The twelve fixtures were run three times in a two-client local Build & Test world in the A-owner direction. All 36 shots settled normally (`forced=false`). The table reports the observed range across the three runs; trajectory values are matched sample comparisons from the full `SampleAll` capture, and final values are Remote-vs-authoritative ShotEnd values.
+The historical multi-metre values are retained as pre-fix history. They were measured before FixedUpdate-only application and with the earlier matrix runner. The old B-owner run also advanced past its first preset while ownership transfer was still pending, so its first recorded ShotId was not the advertised first fixture.
+
+The post-fix four-fixture matrix used 20 shots per direction. In the A-owner run, shot 1 reached `ShotEnd` on the owner before the remote had a local ShotStart sample, so that shot is explicitly marked join-incomplete rather than treated as a Physics trajectory comparison. In the B-owner run, the remote did receive shot 1, but it reproduced the startup-only trajectory outlier (`1.697610 m` max). Both cases occurred while the world was still establishing the two-client session.
+
+The harness was then rerun with no production-code delay or network change: it only waited for both Build & Test clients to join before starting the first fixture. Five `StraightWeak` shots in each direction produced these paired `SampleAll` results:
+
+| Direction | first-shot trajectory max | all five trajectory max range | forced ShotEnd |
+| --- | ---: | ---: | ---: |
+| A owner -> B remote | `0 m` | `0–0.000135 m` | `0/5` |
+| B owner -> A remote | `0.000135 m` | `0.000135 m` | `0/5` |
+
+The startup outlier therefore tracks an incomplete/initializing two-client measurement, not a steady-state Physics divergence. The production path does not add a magic delay; the logs now expose the receive frame and step so an early-start attempt is distinguishable from a valid paired trajectory.
+
+## Historical fixture matrix (pre-FixedUpdate validation)
+
+The twelve fixtures were run three times in a two-client local Build & Test world in the A-owner direction before the FixedUpdate-only change. All 36 shots settled normally (`forced=false`). The table reports the observed range across the three runs; trajectory values are matched sample comparisons from the full `SampleAll` capture, and final values are Remote-vs-authoritative ShotEnd values. These values remain as pre-fix history; the final additional matrix below is the acceptance result.
 
 | Fixture | A owner runs | trajectory max range (m) | final max range (m) | forced |
 | --- | ---: | ---: | ---: | ---: |
@@ -91,6 +117,29 @@ The required reverse-direction representative matrix was also run three times pe
 
 Collision fixture event evidence was real rather than a layout false positive: A-owner counts were Front 4, Angle 3, Double 7, and Multi 13; B-owner counts were Front 4, Multi 13, GatePost 3, and GateCenter 2. The event sequence remains diagnostic and is compared separately from position error.
 
+### Final additional matrix
+
+After the FixedUpdate change, the required four fixtures were run five times in each direction. All 40 scheduled shots settled normally (`forced=false`). The full-capture post-fix trajectory comparison paired 20/20 B-owner shots and 19/20 A-owner shots; the one unpaired A-owner shot is the join-incomplete startup case described above. For the paired steady-state shots, trajectory max stayed at or below `0.001226 m` A-owner and `0.001088 m` B-owner, with mean trajectory error below `0.000001 m` per shot. The warmup five-shot runs removed the only metre-scale first-shot values.
+
+Final ShotEnd records from the classification reruns were also normal for all 40 shots. Excluding the join-incomplete startup record, final correction was sub-millimetre to low-millimetre; the largest startup-warmup correction was `0.000271321 m` A-owner and `0.000135422 m` B-owner.
+
+## Event divergence classification
+
+The existing encoded event sequence is decoded into `eventType`, `ballId`, `targetBallId`, `gateIndex`, and sequence index. Telemetry records missing-remote, extra-remote, different-type, different-ball, different-target, different-gate, ordering-only, duplicate, gameplay-critical, and diagnostic counts. It also logs the decoded event payload for each unmatched sequence entry.
+
+The two 20-shot classification reruns produced:
+
+| Direction | divergent shots | missing | extra | different fields | ordering-only | duplicate | gameplay-critical | diagnostic |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| A owner -> B remote | 11/20 | 5 | 6 | 0 | 0 | 0 | 0 | 11 |
+| B owner -> A remote | 10/20 | 3 | 7 | 0 | 0 | 0 | 0 | 10 |
+
+Every logged unmatched event was `type=5` (`Settled`), with the corresponding ball id and no target/gate. There were no Ball-Ball Touch, Gate crossing, Gate post, or Out gameplay-critical divergences. The remaining differences are diagnostic timing/callback presence differences, not an event payload disagreement. The comparison does not deduplicate gameplay events or synchronize events mid-shot.
+
+## Debug UI metric policy
+
+Runtime ShotEnd telemetry can compare final authoritative state and correction distance, but it does not have the Owner's complete trajectory without adding per-step network synchronization. The in-world Debug UI therefore displays `trajectory metrics offline validation only` and does not show a misleading zero or stale runtime trajectory value. The offline `SampleAll` parser and the local `(shotId, simulationStep, ballId)` samples remain the source of trajectory max/mean values.
+
 ## Forced-settlement investigation
 
 The previous non-master StraightWeak timeout was caused by a stroke that reached the Udon method but did not change Rigidbody velocity on the VRChat client path. The diagnostic sequence showed `initialized=true`, `isKinematic=false`, zero velocity after `AddForce`, `observedMotion=false`, and `forced=true` at 30 seconds. Replacing that initial impulse with the equivalent mass-scaled velocity fixed the root cause.
@@ -104,7 +153,7 @@ The repository workflow now validates a general SemVer package version, requires
 Focused Unity validation after the fix:
 
 ```text
-EditMode  Pm.Booth.Aoinu607.Udon.Gateball.Tests.Editor   17 passed
+EditMode  Pm.Booth.Aoinu607.Udon.Gateball.Tests.Editor   18 passed
 PlayMode  Pm.Booth.Aoinu607.Udon.Gateball.Tests.Runtime    8 passed
 UdonSharp compile                                        0 errors
 ```
@@ -113,7 +162,7 @@ The SDK World Builder was run with two VRChat Build & Test clients. Validation a
 
 ## Known limitations
 
-- The first shot after world startup can have a large trajectory outlier even when final correction is small; the cause is not yet isolated to startup scheduling versus physics timing.
+- A shot started before the second Build & Test client has joined is not a valid paired trajectory measurement. The receive-frame and ShotStart/StrokeApplied logs expose this condition; gameplay should use the authoritative ShotEnd for that startup case.
 - Event comparison is diagnostic and local. It does not make Remote events authoritative.
 - The 30-second timeout is intentionally retained as an abnormal-state guard.
 - Late Join behavior is covered by the deterministic state-transition test; a full automated two-process join/leave scenario is still an environment-level test.
@@ -121,4 +170,4 @@ The SDK World Builder was run with two VRChat Build & Test clients. Validation a
 
 ## Go / Modify decision for v0.3
 
-**MODIFY:** local physics execution and final authoritative settlement are operational, but the first-shot 1.530006–1.871013 m trajectory outliers and non-zero event divergence show that trajectory and event parity is not yet strong enough for gameplay-critical rules. Keep the current architecture and telemetry, isolate startup/sample timing, and repeat the matrix after that cause is removed. Do not add continuous synchronization or hide the divergence with mid-shot correction.
+**GO:** the FixedUpdate boundary makes Owner and Remote start semantics equivalent; Remote physics executes step-by-step in every valid trial; normal shots did not force-settle; the startup metre-scale result is explained by a pre-join/incomplete comparison and disappears after both clients are ready; steady-state trajectory error is millimetre-level or below; gameplay-critical event divergence was zero in the representative classification runs; final corrections are normally sub-millimetre to low-millimetre; and the Debug UI no longer presents an invalid runtime trajectory value. Continue to keep trajectory and event metrics diagnostic, with authoritative ShotEnd as the gameplay boundary.

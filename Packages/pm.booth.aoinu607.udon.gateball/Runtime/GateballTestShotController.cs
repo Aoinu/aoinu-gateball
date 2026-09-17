@@ -27,7 +27,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private const int PresetCount = 12;
         private int _matrixRunIndex;
         private int _matrixPresetIndex;
+        private int _matrixShotIdBefore;
         private bool _matrixShotActive;
+        private bool _matrixShotStarted;
 
         private void Start()
         {
@@ -69,9 +71,19 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (NetworkState != null && NetworkState.Phase == GateballNetworkState.PhaseSimulating)
             {
+                _matrixShotStarted = true;
                 SendCustomEventDelayedSeconds("_PollMatrix", 0.5f);
                 return;
             }
+
+            if (!_matrixShotStarted
+                && (NetworkState == null || NetworkState.ShotId == _matrixShotIdBefore))
+            {
+                SendCustomEventDelayedSeconds("_PollMatrix", 0.5f);
+                return;
+            }
+
+            _matrixShotStarted = true;
 
             if (_matrixShotActive)
             {
@@ -203,6 +215,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             SelectedPreset = _matrixPresetIndex;
             _matrixShotActive = true;
+            _matrixShotStarted = false;
+            _matrixShotIdBefore = NetworkState == null ? -1 : NetworkState.ShotId;
             Debug.Log("[Gateball v0.2] MatrixShot run=" + (_matrixRunIndex + 1).ToString()
                 + " preset=" + SelectedPreset.ToString());
             _RunSelectedPreset();

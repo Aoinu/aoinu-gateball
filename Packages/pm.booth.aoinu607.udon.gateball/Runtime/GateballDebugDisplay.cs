@@ -35,8 +35,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + "stroke ball " + NetworkState.StrokeBallId.ToString() + " impulse " + NetworkState.StrokeImpulse.ToString() + "\n"
                 + "step " + NetworkState.LocalSimulationStep.ToString() + " fixed " + NetworkState.LocalFixedDeltaTime.ToString() + "\n"
                 + "correction " + NetworkState.LastFinalCorrectionDistance.ToString() + "\n"
-                + "trajectory max " + NetworkState.LastMaxTrajectoryPositionError.ToString()
-                + " mean " + NetworkState.LastMeanTrajectoryPositionError.ToString() + "\n"
+                + "trajectory metrics offline validation only\n"
                 + "final max " + NetworkState.LastMaxFinalPositionError.ToString()
                 + " mean " + NetworkState.LastMeanFinalPositionError.ToString()
                 + " stroke " + NetworkState.LastFinalPositionError.ToString() + "\n"

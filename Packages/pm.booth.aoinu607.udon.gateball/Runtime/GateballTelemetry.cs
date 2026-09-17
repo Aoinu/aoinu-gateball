@@ -16,6 +16,18 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public const int EventOut = 4;
         public const int EventSettled = 5;
 
+        public const int EventClassificationMissingRemote = 0;
+        public const int EventClassificationExtraRemote = 1;
+        public const int EventClassificationDifferentType = 2;
+        public const int EventClassificationDifferentBall = 3;
+        public const int EventClassificationDifferentTarget = 4;
+        public const int EventClassificationDifferentGate = 5;
+        public const int EventClassificationOrderingOnly = 6;
+        public const int EventClassificationDuplicate = 7;
+        public const int EventClassificationGameplayCritical = 8;
+        public const int EventClassificationDiagnostic = 9;
+        public const int EventClassificationCount = 10;
+
         [Header("Recording")]
         public bool RecordSamples = true;
         public bool LogAllSamples;
@@ -53,6 +65,16 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         [System.NonSerialized] public int SettleStepError;
         [System.NonSerialized] public float FinalCorrectionDistance;
         [System.NonSerialized] public int EventDivergenceCount;
+        [System.NonSerialized] public int MissingRemoteEventCount;
+        [System.NonSerialized] public int ExtraRemoteEventCount;
+        [System.NonSerialized] public int DifferentEventTypeCount;
+        [System.NonSerialized] public int DifferentBallCount;
+        [System.NonSerialized] public int DifferentTargetCount;
+        [System.NonSerialized] public int DifferentGateCount;
+        [System.NonSerialized] public int OrderingOnlyEventDifferenceCount;
+        [System.NonSerialized] public int DuplicateEventDifferenceCount;
+        [System.NonSerialized] public int GameplayCriticalEventDivergenceCount;
+        [System.NonSerialized] public int DiagnosticEventDivergenceCount;
 
         private float _wallClockStart;
         private int _sampleWriteIndex;
@@ -82,6 +104,16 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             SettleStepError = 0;
             FinalCorrectionDistance = 0f;
             EventDivergenceCount = 0;
+            MissingRemoteEventCount = 0;
+            ExtraRemoteEventCount = 0;
+            DifferentEventTypeCount = 0;
+            DifferentBallCount = 0;
+            DifferentTargetCount = 0;
+            DifferentGateCount = 0;
+            OrderingOnlyEventDifferenceCount = 0;
+            DuplicateEventDifferenceCount = 0;
+            GameplayCriticalEventDivergenceCount = 0;
+            DiagnosticEventDivergenceCount = 0;
             for (int i = 0; i < GateballGeometry.BallCount; i++)
             {
                 MaxTrajectoryPositionErrors[i] = 0f;
@@ -230,6 +262,25 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             SettleTimeError = Mathf.Abs(ElapsedSimulationTime - ownerElapsedSimulationTime);
             SettleStepError = Mathf.Abs(SimulationStep - ownerSimulationStep);
             EventDivergenceCount = CalculateEventDivergenceCount(EventSequence, EventCount, ownerEvents, ownerEventCount);
+            int[] classification = CalculateEventDivergenceClassification(
+                EventSequence,
+                EventCount,
+                ownerEvents,
+                ownerEventCount);
+            MissingRemoteEventCount = classification[EventClassificationMissingRemote];
+            ExtraRemoteEventCount = classification[EventClassificationExtraRemote];
+            DifferentEventTypeCount = classification[EventClassificationDifferentType];
+            DifferentBallCount = classification[EventClassificationDifferentBall];
+            DifferentTargetCount = classification[EventClassificationDifferentTarget];
+            DifferentGateCount = classification[EventClassificationDifferentGate];
+            OrderingOnlyEventDifferenceCount = classification[EventClassificationOrderingOnly];
+            DuplicateEventDifferenceCount = classification[EventClassificationDuplicate];
+            GameplayCriticalEventDivergenceCount = classification[EventClassificationGameplayCritical];
+            DiagnosticEventDivergenceCount = classification[EventClassificationDiagnostic];
+            if (!IsOwner && EventDivergenceCount > 0)
+            {
+                _LogEventDifferenceDetails(ownerEvents, ownerEventCount);
+            }
         }
 
         public void _RecordTrajectoryComparison(
@@ -288,6 +339,26 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public static int EncodeEvent(int eventType, int ballId, int targetId, int gateIndex)
         {
             return eventType * 1000000 + ballId * 10000 + (targetId + 1) * 100 + gateIndex + 1;
+        }
+
+        public static int DecodeEventType(int encodedEvent)
+        {
+            return encodedEvent / 1000000;
+        }
+
+        public static int DecodeEventBallId(int encodedEvent)
+        {
+            return (encodedEvent % 1000000) / 10000;
+        }
+
+        public static int DecodeEventTargetId(int encodedEvent)
+        {
+            return ((encodedEvent % 10000) / 100) - 1;
+        }
+
+        public static int DecodeEventGateIndex(int encodedEvent)
+        {
+            return (encodedEvent % 100) - 1;
         }
 
         public static float CalculateMaxPositionError(Vector3[] localPositions, Vector3[] ownerPositions)
@@ -425,6 +496,122 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             return divergence;
         }
 
+        public static int[] CalculateEventDivergenceClassification(
+            int[] remoteEvents,
+            int remoteCount,
+            int[] ownerEvents,
+            int ownerCount)
+        {
+            int[] result = new int[EventClassificationCount];
+            int safeRemoteCount = _GetEventCount(remoteEvents, remoteCount);
+            int safeOwnerCount = _GetEventCount(ownerEvents, ownerCount);
+            bool[] remoteMatched = new bool[MaxEventCount];
+            bool[] ownerMatched = new bool[MaxEventCount];
+
+            for (int ownerIndex = 0; ownerIndex < safeOwnerCount; ownerIndex++)
+            {
+                int remoteIndex = -1;
+                for (int candidate = 0; candidate < safeRemoteCount; candidate++)
+                {
+                    if (!remoteMatched[candidate] && remoteEvents[candidate] == ownerEvents[ownerIndex])
+                    {
+                        remoteIndex = candidate;
+                        break;
+                    }
+                }
+
+                if (remoteIndex < 0)
+                {
+                    result[EventClassificationMissingRemote]++;
+                    if (_ContainsEvent(remoteEvents, safeRemoteCount, ownerEvents[ownerIndex]))
+                    {
+                        result[EventClassificationDuplicate]++;
+                        result[EventClassificationDiagnostic]++;
+                    }
+                    else if (_IsGameplayCriticalEventType(DecodeEventType(ownerEvents[ownerIndex])))
+                    {
+                        result[EventClassificationGameplayCritical]++;
+                    }
+                    else
+                    {
+                        result[EventClassificationDiagnostic]++;
+                    }
+                    continue;
+                }
+
+                remoteMatched[remoteIndex] = true;
+                ownerMatched[ownerIndex] = true;
+                if (remoteIndex != ownerIndex)
+                {
+                    result[EventClassificationOrderingOnly]++;
+                    result[EventClassificationDiagnostic]++;
+                }
+            }
+
+            for (int remoteIndex = 0; remoteIndex < safeRemoteCount; remoteIndex++)
+            {
+                if (remoteMatched[remoteIndex])
+                {
+                    continue;
+                }
+
+                result[EventClassificationExtraRemote]++;
+                if (_ContainsEvent(ownerEvents, safeOwnerCount, remoteEvents[remoteIndex]))
+                {
+                    result[EventClassificationDuplicate]++;
+                    result[EventClassificationDiagnostic]++;
+                }
+                else if (_IsGameplayCriticalEventType(DecodeEventType(remoteEvents[remoteIndex])))
+                {
+                    result[EventClassificationGameplayCritical]++;
+                }
+                else
+                {
+                    result[EventClassificationDiagnostic]++;
+                }
+            }
+
+            int sharedCount = Mathf.Min(safeRemoteCount, safeOwnerCount);
+            for (int index = 0; index < sharedCount; index++)
+            {
+                if (remoteMatched[index] || ownerMatched[index]
+                    || remoteEvents[index] == ownerEvents[index])
+                {
+                    continue;
+                }
+
+                int remoteType = DecodeEventType(remoteEvents[index]);
+                int ownerType = DecodeEventType(ownerEvents[index]);
+                if (remoteType != ownerType)
+                {
+                    result[EventClassificationDifferentType]++;
+                }
+                if (DecodeEventBallId(remoteEvents[index]) != DecodeEventBallId(ownerEvents[index]))
+                {
+                    result[EventClassificationDifferentBall]++;
+                }
+                if (DecodeEventTargetId(remoteEvents[index]) != DecodeEventTargetId(ownerEvents[index]))
+                {
+                    result[EventClassificationDifferentTarget]++;
+                }
+                if (DecodeEventGateIndex(remoteEvents[index]) != DecodeEventGateIndex(ownerEvents[index]))
+                {
+                    result[EventClassificationDifferentGate]++;
+                }
+
+                if (_IsGameplayCriticalEventType(remoteType) || _IsGameplayCriticalEventType(ownerType))
+                {
+                    result[EventClassificationGameplayCritical]++;
+                }
+                else
+                {
+                    result[EventClassificationDiagnostic]++;
+                }
+            }
+
+            return result;
+        }
+
         private static int _GetPositionCount(Vector3[] first, Vector3[] second)
         {
             if (first == null || second == null)
@@ -467,6 +654,32 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             return Mathf.Clamp(count, 0, Mathf.Min(events.Length, MaxEventCount));
+        }
+
+        private static bool _ContainsEvent(int[] events, int count, int encodedEvent)
+        {
+            if (events == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < count; i++)
+            {
+                if (events[i] == encodedEvent)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static bool _IsGameplayCriticalEventType(int eventType)
+        {
+            return eventType == EventBallCollision
+                || eventType == EventGateCrossing
+                || eventType == EventGatePostCollision
+                || eventType == EventOut;
         }
 
         private GateballBall _FindBall(GateballBall[] balls, int ballId)
@@ -574,6 +787,47 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             {
                 EventSequence[i] = 0;
             }
+        }
+
+        private void _LogEventDifferenceDetails(int[] ownerEvents, int ownerEventCount)
+        {
+            int safeRemoteCount = _GetEventCount(EventSequence, EventCount);
+            int safeOwnerCount = _GetEventCount(ownerEvents, ownerEventCount);
+            int sharedCount = Mathf.Min(safeRemoteCount, safeOwnerCount);
+            for (int index = 0; index < sharedCount; index++)
+            {
+                if (EventSequence[index] == ownerEvents[index])
+                {
+                    continue;
+                }
+
+                Debug.Log("[Gateball v0.2] EventDiff shot=" + ShotId.ToString()
+                    + " kind=sequenceMismatch index=" + index.ToString()
+                    + " remote=" + _DescribeEvent(EventSequence[index])
+                    + " owner=" + _DescribeEvent(ownerEvents[index]));
+            }
+
+            for (int index = sharedCount; index < safeRemoteCount; index++)
+            {
+                Debug.Log("[Gateball v0.2] EventDiff shot=" + ShotId.ToString()
+                    + " kind=extraRemote index=" + index.ToString()
+                    + " remote=" + _DescribeEvent(EventSequence[index]));
+            }
+
+            for (int index = sharedCount; index < safeOwnerCount; index++)
+            {
+                Debug.Log("[Gateball v0.2] EventDiff shot=" + ShotId.ToString()
+                    + " kind=missingRemote index=" + index.ToString()
+                    + " owner=" + _DescribeEvent(ownerEvents[index]));
+            }
+        }
+
+        private string _DescribeEvent(int encodedEvent)
+        {
+            return "type=" + DecodeEventType(encodedEvent).ToString()
+                + ",ball=" + DecodeEventBallId(encodedEvent).ToString()
+                + ",target=" + DecodeEventTargetId(encodedEvent).ToString()
+                + ",gate=" + DecodeEventGateIndex(encodedEvent).ToString();
         }
     }
 }
