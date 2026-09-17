@@ -111,7 +111,17 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             Body.position = _initialPosition;
-            Body.rotation = _initialRotation;
+            Quaternion resetRotation = _initialRotation;
+            float rotationMagnitude = resetRotation.x * resetRotation.x
+                + resetRotation.y * resetRotation.y
+                + resetRotation.z * resetRotation.z
+                + resetRotation.w * resetRotation.w;
+            if (rotationMagnitude < 0.5f)
+            {
+                resetRotation = Quaternion.identity;
+            }
+
+            Body.rotation = resetRotation;
             Body.velocity = Vector3.zero;
             Body.angularVelocity = Vector3.zero;
             Body.Sleep();
@@ -141,6 +151,25 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (Court != null)
             {
                 Court._ResetBallState(this);
+            }
+        }
+
+        public void _StopForOut()
+        {
+            if (!_initialized || Body == null)
+            {
+                return;
+            }
+
+            Body.velocity = Vector3.zero;
+            Body.angularVelocity = Vector3.zero;
+            Body.Sleep();
+            _stillTime = 0f;
+            _hasMoved = false;
+
+            if (Court != null)
+            {
+                Court._NotifyBallStopped(this);
             }
         }
 

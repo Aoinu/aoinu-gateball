@@ -9,8 +9,11 @@ using GateballGatePost = Pm.Booth.Aoinu607.Udon.Gateball.GateballGatePost;
 using GateballGeometry = Pm.Booth.Aoinu607.Udon.Gateball.GateballGeometry;
 using GateballGoalPole = Pm.Booth.Aoinu607.Udon.Gateball.GateballGoalPole;
 using GateballMallet = Pm.Booth.Aoinu607.Udon.Gateball.GateballMallet;
+using GateballDebugDisplay = Pm.Booth.Aoinu607.Udon.Gateball.GateballDebugDisplay;
+using GateballNetworkState = Pm.Booth.Aoinu607.Udon.Gateball.GateballNetworkState;
 using GateballStrokeRouter = Pm.Booth.Aoinu607.Udon.Gateball.GateballStrokeRouter;
 using GateballTestShotController = Pm.Booth.Aoinu607.Udon.Gateball.GateballTestShotController;
+using GateballTelemetry = Pm.Booth.Aoinu607.Udon.Gateball.GateballTelemetry;
 using UdonSharpEditor;
 using UdonSharp;
 using UnityEditor;
@@ -18,6 +21,7 @@ using UnityEditorInternal;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 using VRCPickup = VRC.SDK3.Components.VRCPickup;
 using VRCSceneDescriptor = VRC.SDK3.Components.VRCSceneDescriptor;
 
@@ -90,6 +94,7 @@ public static class GateballDevelopmentSceneBuilder
     [MenuItem("Aoinu Gateball/Build Development Scene")]
     public static void BuildDevelopmentScene()
     {
+        CreateUdonProgramAssets();
         Scene scene = SceneManager.GetActiveScene();
         GameObject oldRoot = GameObject.Find(RootName);
         if (oldRoot != null)
@@ -126,6 +131,12 @@ public static class GateballDevelopmentSceneBuilder
         court.CourtWidth = GateballGeometry.CourtWidth;
         court.CourtLength = GateballGeometry.CourtLength;
         court.OutMargin = GateballGeometry.DefaultOutMargin;
+
+        GateballTelemetry telemetry = CreateUdonObject<GateballTelemetry>(root.transform, "Telemetry");
+        GateballNetworkState networkState = CreateUdonObject<GateballNetworkState>(root.transform, "NetworkState");
+        networkState.Court = court;
+        networkState.Telemetry = telemetry;
+        court.Telemetry = telemetry;
 
         CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(GateballGeometry.CourtWidth, 0.20f, GateballGeometry.CourtLength), floorMaterial, EnvironmentLayer);
         float halfCourtWidth = GateballGeometry.CourtWidth * 0.5f;
@@ -184,6 +195,7 @@ public static class GateballDevelopmentSceneBuilder
 
         GateballStrokeRouter router = CreateUdonObject<GateballStrokeRouter>(root.transform, "StrokeRouter");
         router.Court = court;
+        router.NetworkState = networkState;
         router.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
         GameObject malletObject = CreatePrimitive("VRMallet", PrimitiveType.Cylinder, root.transform, new Vector3(3f, 1.3f, -7f), new Vector3(0.12f, 0.75f, 0.12f), toolMaterial, PickupLayer);
@@ -227,6 +239,33 @@ public static class GateballDevelopmentSceneBuilder
         GateballTestShotController testShot = testShotObject.AddUdonSharpComponent<GateballTestShotController>();
         testShot.Court = court;
         testShot.StrokeRouter = router;
+        testShot.NetworkState = networkState;
+        testShot.AutoRunOnStart = false;
+        testShot.AutoRunPlayerId = 1;
+        testShot.AutoRunDelaySeconds = 2f;
+
+        GameObject debugObject = new GameObject("DebugUI");
+        debugObject.transform.SetParent(root.transform, false);
+        debugObject.transform.localPosition = new Vector3(-6.8f, 1.8f, -8.8f);
+        debugObject.transform.localRotation = Quaternion.identity;
+        Canvas debugCanvas = debugObject.AddComponent<Canvas>();
+        debugCanvas.renderMode = RenderMode.WorldSpace;
+        debugObject.transform.localScale = Vector3.one * 0.01f;
+        GameObject debugTextObject = new GameObject("Text");
+        debugTextObject.transform.SetParent(debugObject.transform, false);
+        RectTransform debugRect = debugTextObject.AddComponent<RectTransform>();
+        debugRect.sizeDelta = new Vector2(700f, 320f);
+        Text debugText = debugTextObject.AddComponent<Text>();
+        debugText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        debugText.alignment = TextAnchor.UpperLeft;
+        debugText.fontSize = 28;
+        debugText.color = Color.white;
+        debugText.horizontalOverflow = HorizontalWrapMode.Wrap;
+        debugText.verticalOverflow = VerticalWrapMode.Overflow;
+        GateballDebugDisplay debugDisplay = debugTextObject.AddUdonSharpComponent<GateballDebugDisplay>();
+        debugDisplay.NetworkState = networkState;
+        debugDisplay.Telemetry = telemetry;
+        debugDisplay.Text = debugText;
 
         court.Balls = balls;
         court.Gates = gates;
@@ -234,6 +273,9 @@ public static class GateballDevelopmentSceneBuilder
         EditorUtility.SetDirty(router);
         EditorUtility.SetDirty(desktop);
         EditorUtility.SetDirty(testShot);
+        EditorUtility.SetDirty(telemetry);
+        EditorUtility.SetDirty(networkState);
+        EditorUtility.SetDirty(debugDisplay);
 
         CreateSpawns(root.transform);
         ConfigureSceneDescriptor();

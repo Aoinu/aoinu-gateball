@@ -15,6 +15,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public GateballBall[] Balls;
         public GateballGate[] Gates;
         public GateballGoalPole GoalPole;
+        public GateballTelemetry Telemetry;
 
         [Header("Debug")]
         public bool DebugMode;
@@ -94,11 +95,17 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                     && GateballGeometry.IsOutOfCourt(currentPosition, CourtWidth, CourtLength, OutMargin))
                 {
                     _outStates[ballIndex] = true;
+                    ball._StopForOut();
                 }
 
                 _EvaluateGateCrossings(ball, ballIndex, _previousPositions[ballIndex], ball.transform.position);
                 _EvaluateGoalPoleContact(ball, ballIndex);
                 _previousPositions[ballIndex] = ball.transform.position;
+            }
+
+            if (Telemetry != null)
+            {
+                Telemetry._RecordFixedStep(Balls);
             }
         }
 
@@ -131,6 +138,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (ball != null)
             {
                 LastStoppedBallId = ball.BallId;
+                if (Telemetry != null)
+                {
+                    Telemetry._RecordEvent(GateballTelemetry.EventSettled, ball.BallId, -1, -1);
+                }
             }
         }
 
@@ -149,6 +160,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             _touchCounts[index]++;
             _lastTouchTargetIds[index] = target.BallId;
+            if (Telemetry != null)
+            {
+                Telemetry._RecordEvent(GateballTelemetry.EventBallCollision, striker.BallId, target.BallId, -1);
+            }
         }
 
         public void _RegisterGatePostCollision(GateballBall ball, int gateIndex)
@@ -160,6 +175,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             _gatePostCollisionCounts[index]++;
+            if (Telemetry != null)
+            {
+                Telemetry._RecordEvent(GateballTelemetry.EventGatePostCollision, ball.BallId, -1, gateIndex);
+            }
         }
 
         public void _RegisterBoundaryCollision(GateballBall ball)
@@ -169,6 +188,12 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             {
                 _boundaryCollisionCounts[index]++;
                 _outStates[index] = true;
+                if (Telemetry != null)
+                {
+                    Telemetry._RecordEvent(GateballTelemetry.EventOut, ball.BallId, -1, -1);
+                }
+
+                ball._StopForOut();
             }
         }
 
@@ -223,6 +248,108 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             ball._SetPosition(worldPosition);
             _previousPositions[GateballGeometry.BallIdToIndex(ballId)] = worldPosition;
+        }
+
+        public void _CaptureBallPositions(Vector3[] destination)
+        {
+            if (destination == null || Balls == null)
+            {
+                return;
+            }
+
+            int count = Mathf.Min(GateballGeometry.BallCount, destination.Length);
+            for (int i = 0; i < count; i++)
+            {
+                destination[i] = Vector3.zero;
+            }
+
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball == null || !GateballGeometry.IsValidBallId(ball.BallId))
+                {
+                    continue;
+                }
+
+                int index = GateballGeometry.BallIdToIndex(ball.BallId);
+                if (index >= 0 && index < count)
+                {
+                    destination[index] = ball.Body == null ? ball.transform.position : ball.Body.position;
+                }
+            }
+        }
+
+        public void _ApplyBallPositions(Vector3[] positions)
+        {
+            if (positions == null || Balls == null)
+            {
+                return;
+            }
+
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball == null || !GateballGeometry.IsValidBallId(ball.BallId))
+                {
+                    continue;
+                }
+
+                int index = GateballGeometry.BallIdToIndex(ball.BallId);
+                if (index >= 0 && index < positions.Length)
+                {
+                    ball._SetPosition(positions[index]);
+                }
+            }
+        }
+
+        public bool _HasAnyBallMotion()
+        {
+            if (Balls == null)
+            {
+                return false;
+            }
+
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball != null && ball.Body != null
+                    && !GateballGeometry.IsStopped(
+                        ball.Body.velocity,
+                        ball.Body.angularVelocity,
+                        ball.Radius,
+                        ball.StopLinearSpeed,
+                        ball.StopAngularTipSpeed))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        public bool _AreAllBallsStopped()
+        {
+            if (Balls == null)
+            {
+                return true;
+            }
+
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball != null && ball.Body != null
+                    && !GateballGeometry.IsStopped(
+                        ball.Body.velocity,
+                        ball.Body.angularVelocity,
+                        ball.Radius,
+                        ball.StopLinearSpeed,
+                        ball.StopAngularTipSpeed))
+                {
+                    return false;
+                }
+            }
+
+            return true;
         }
 
         public GateballBall _GetBall(int ballId)
@@ -352,6 +479,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                     {
                         _invalidGatePassCounts[ballIndex]++;
                     }
+
+                    if (Telemetry != null)
+                    {
+                        Telemetry._RecordEvent(GateballTelemetry.EventGateCrossing, ball.BallId, 1, gate.GateIndex);
+                    }
                 }
 
                 if (GateballGeometry.TryGetGateCrossing(
@@ -367,6 +499,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                     out crossingPoint))
                 {
                     _reverseGatePassCounts[ballIndex]++;
+                    if (Telemetry != null)
+                    {
+                        Telemetry._RecordEvent(GateballTelemetry.EventGateCrossing, ball.BallId, 0, gate.GateIndex);
+                    }
                 }
             }
         }

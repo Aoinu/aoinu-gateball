@@ -7,6 +7,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     public class GateballStrokeRouter : UdonSharpBehaviour
     {
         public GateballCourt Court;
+        public GateballNetworkState NetworkState;
         public float MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
         public void _ApplyStrokeById(int ballId, Vector3 direction, float impulse)
@@ -16,7 +17,14 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
-            _ApplyStrokeToBall(Court._GetBall(ballId), direction, impulse);
+            float safeImpulse = Mathf.Clamp(impulse, 0f, MaximumImpulse);
+            if (NetworkState != null)
+            {
+                NetworkState._RequestStroke(ballId, direction, safeImpulse);
+                return;
+            }
+
+            _ApplyStrokeToBall(Court._GetBall(ballId), direction, safeImpulse);
         }
 
         public void _ApplyStrokeToBall(GateballBall ball, Vector3 direction, float impulse)

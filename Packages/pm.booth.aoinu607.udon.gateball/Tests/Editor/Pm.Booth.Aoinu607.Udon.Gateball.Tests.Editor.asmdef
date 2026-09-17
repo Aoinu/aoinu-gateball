@@ -4,6 +4,7 @@
   "references": [
     "UnityEngine.TestRunner",
     "UnityEditor.TestRunner",
+    "UdonSharp.Runtime",
     "Pm.Booth.Aoinu607.Udon.Gateball"
   ],
   "includePlatforms": [
