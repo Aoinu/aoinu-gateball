@@ -131,8 +131,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         [Test]
         public void CourtBoundsAndStopThresholdsAreStable()
         {
-            Assert.IsFalse(GateballGeometry.IsOutOfCourt(Vector3.zero, 15f, 20f, 0.35f));
-            Assert.IsTrue(GateballGeometry.IsOutOfCourt(new Vector3(7.9f, 0f, 0f), 15f, 20f, 0.35f));
+            Assert.AreEqual(GateballGeometry.BallRadius * 2f, GateballGeometry.DefaultOutMargin, 0.000001f);
+            Assert.IsFalse(GateballGeometry.IsOutOfCourt(Vector3.zero, 15f, 20f, GateballGeometry.DefaultOutMargin));
+            Assert.IsTrue(GateballGeometry.IsOutOfCourt(new Vector3(7.576f, 0f, 0f), 15f, 20f, GateballGeometry.DefaultOutMargin));
             Assert.IsTrue(GateballGeometry.IsStopped(
                 new Vector3(0.02f, 0f, 0f),
                 new Vector3(0f, 0.1f, 0f),

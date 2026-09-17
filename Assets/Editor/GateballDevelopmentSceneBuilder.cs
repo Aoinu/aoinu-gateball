@@ -125,7 +125,7 @@ public static class GateballDevelopmentSceneBuilder
         GateballCourt court = courtObject.AddUdonSharpComponent<GateballCourt>();
         court.CourtWidth = GateballGeometry.CourtWidth;
         court.CourtLength = GateballGeometry.CourtLength;
-        court.OutMargin = 0.35f;
+        court.OutMargin = GateballGeometry.DefaultOutMargin;
 
         CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(GateballGeometry.CourtWidth, 0.20f, GateballGeometry.CourtLength), floorMaterial, EnvironmentLayer);
         float halfCourtWidth = GateballGeometry.CourtWidth * 0.5f;
@@ -184,7 +184,7 @@ public static class GateballDevelopmentSceneBuilder
 
         GateballStrokeRouter router = CreateUdonObject<GateballStrokeRouter>(root.transform, "StrokeRouter");
         router.Court = court;
-        router.MaximumImpulse = 7f;
+        router.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
         GameObject malletObject = CreatePrimitive("VRMallet", PrimitiveType.Cylinder, root.transform, new Vector3(3f, 1.3f, -7f), new Vector3(0.12f, 0.75f, 0.12f), toolMaterial, PickupLayer);
         Collider malletCollider = malletObject.GetComponent<Collider>();
@@ -212,13 +212,16 @@ public static class GateballDevelopmentSceneBuilder
         mallet.ProxyRadius = GateballGeometry.BallRadius + 0.02f;
         mallet.BallLayer = PickupLayer;
         mallet.StrikeScale = 0.45f;
-        mallet.MaximumImpulse = 7f;
+        mallet.MinimumImpulse = GateballGeometry.WeakStrokeImpulse;
+        mallet.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
         GameObject desktopObject = CreatePrimitive("DesktopControls", PrimitiveType.Cube, root.transform, new Vector3(-4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballDesktopController desktop = desktopObject.AddUdonSharpComponent<GateballDesktopController>();
         desktop.StrokeRouter = router;
         desktop.SelectedBallId = 1;
-        desktop.Power = 2.5f;
+        desktop.Power = GateballGeometry.NormalStrokeImpulse;
+        desktop.MinimumPower = GateballGeometry.WeakStrokeImpulse;
+        desktop.MaximumPower = GateballGeometry.StrongStrokeImpulse;
 
         GameObject testShotObject = CreatePrimitive("TestShotController", PrimitiveType.Cube, root.transform, new Vector3(4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballTestShotController testShot = testShotObject.AddUdonSharpComponent<GateballTestShotController>();

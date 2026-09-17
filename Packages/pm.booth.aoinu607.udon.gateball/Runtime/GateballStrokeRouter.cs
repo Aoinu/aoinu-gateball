@@ -7,7 +7,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     public class GateballStrokeRouter : UdonSharpBehaviour
     {
         public GateballCourt Court;
-        public float MaximumImpulse = 7f;
+        public float MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
         public void _ApplyStrokeById(int ballId, Vector3 direction, float impulse)
         {

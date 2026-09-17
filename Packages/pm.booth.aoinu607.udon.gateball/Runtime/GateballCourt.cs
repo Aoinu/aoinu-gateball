@@ -9,7 +9,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         [Header("Court")]
         public float CourtWidth = GateballGeometry.CourtWidth;
         public float CourtLength = GateballGeometry.CourtLength;
-        public float OutMargin = 0.35f;
+        public float OutMargin = GateballGeometry.DefaultOutMargin;
 
         [Header("Scene References")]
         public GateballBall[] Balls;

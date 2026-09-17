@@ -197,7 +197,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             Assert.IsFalse(court._IsOut(2));
             Assert.IsFalse(court._HasGoalPoleHit(2));
             Assert.AreEqual(1, court.LastStrokeBallId);
-            Assert.AreEqual(1.5f, court.LastStrokeImpulse, 0.0001f);
+            Assert.AreEqual(GateballGeometry.WeakStrokeImpulse, court.LastStrokeImpulse, 0.0001f);
         }
 
         [UnityTest]
@@ -267,7 +267,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             Register(routerObject);
             GateballStrokeRouter router = routerObject.AddComponent<GateballStrokeRouter>();
             router.Court = court;
-            router.MaximumImpulse = 7f;
+            router.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
             return router;
         }
 

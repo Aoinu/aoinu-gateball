@@ -10,11 +10,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public Transform Head;
         public Collider HeadCollider;
         public Collider PhysicsProxy;
-        public float ProxyRadius = 0.09f;
+        public float ProxyRadius = GateballGeometry.BallRadius + 0.02f;
         public int BallLayer = 13;
         public float StrikeScale = 0.45f;
-        public float MinimumImpulse = 0.15f;
-        public float MaximumImpulse = 7f;
+        public float MinimumImpulse = GateballGeometry.WeakStrokeImpulse;
+        public float MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
         public float HitCooldown = 0.18f;
 
         private const int HistorySize = 6;
@@ -92,12 +92,20 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
             if (boxCollider != null && HeadCollider.enabled)
             {
+                Vector3 lossyScale = boxCollider.transform.lossyScale;
+                Vector3 halfExtents = Vector3.Scale(
+                    boxCollider.size,
+                    new Vector3(
+                        Mathf.Abs(lossyScale.x),
+                        Mathf.Abs(lossyScale.y),
+                        Mathf.Abs(lossyScale.z))) * 0.5f;
+                Vector3 centerOffset = boxCollider.transform.TransformVector(boxCollider.center);
                 hitDetected = Physics.BoxCast(
-                    previousPosition,
-                    boxCollider.bounds.extents,
+                    previousPosition + centerOffset,
+                    halfExtents,
                     delta.normalized,
                     out hit,
-                    Head.rotation,
+                    boxCollider.transform.rotation,
                     distance,
                     layerMask,
                     QueryTriggerInteraction.Ignore);

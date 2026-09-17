@@ -19,6 +19,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public const float GoalPoleHeight = 0.20f;
         public const float CourtWidth = 15f;
         public const float CourtLength = 20f;
+        public const float WeakStrokeImpulse = 0.60f;
+        public const float NormalStrokeImpulse = 1.00f;
+        public const float StrongStrokeImpulse = 1.40f;
+        public const float DefaultOutMargin = BallRadius * 2f;
 
         public static bool IsValidBallId(int ballId)
         {

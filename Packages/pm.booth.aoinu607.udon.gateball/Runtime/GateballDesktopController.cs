@@ -11,11 +11,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public GateballStrokeRouter StrokeRouter;
         public int SelectedBallId = 1;
         public float AimYawDegrees;
-        public float Power = 2.5f;
+        public float Power = GateballGeometry.NormalStrokeImpulse;
         public float AimSensitivity = 3f;
         public float PowerSensitivity = 0.08f;
-        public float MinimumPower = 0.2f;
-        public float MaximumPower = 7f;
+        public float MinimumPower = GateballGeometry.WeakStrokeImpulse;
+        public float MaximumPower = GateballGeometry.StrongStrokeImpulse;
 
         public override void InputMoveHorizontal(float value, UdonInputEventArgs args)
         {
@@ -57,17 +57,17 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _StrokeWeak()
         {
-            _Stroke(1.5f);
+            _Stroke(GateballGeometry.WeakStrokeImpulse);
         }
 
         public void _StrokeNormal()
         {
-            _Stroke(3.5f);
+            _Stroke(GateballGeometry.NormalStrokeImpulse);
         }
 
         public void _StrokeStrong()
         {
-            _Stroke(6f);
+            _Stroke(GateballGeometry.StrongStrokeImpulse);
         }
 
         public void _NextBall()
@@ -91,7 +91,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public void _ResetAimAndPower()
         {
             AimYawDegrees = 0f;
-            Power = 2.5f;
+            Power = GateballGeometry.NormalStrokeImpulse;
         }
 
         private void _Stroke(float impulse)
