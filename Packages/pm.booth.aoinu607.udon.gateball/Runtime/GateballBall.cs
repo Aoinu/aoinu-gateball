@@ -32,6 +32,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             get { return GateballGeometry.IsRedBall(BallId) ? 0 : 1; }
         }
 
+        public bool _IsReady()
+        {
+            return _initialized && Body != null;
+        }
+
         private void Start()
         {
             if (Body == null)
@@ -93,7 +98,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             Vector3 safeDirection = GateballGeometry.NormalizeStrokeDirection(direction);
             Body.WakeUp();
-            Body.AddForce(safeDirection * impulse, ForceMode.Impulse);
+            Body.velocity += safeDirection * (impulse / Mathf.Max(0.0001f, Body.mass));
             _hasMoved = true;
             _stillTime = 0f;
 

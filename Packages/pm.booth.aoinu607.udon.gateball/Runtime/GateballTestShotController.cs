@@ -16,29 +16,95 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public bool AutoRunOnStart;
         public int AutoRunPlayerId = 1;
         public float AutoRunDelaySeconds = 2f;
+        [Header("Validation matrix")]
+        public bool AutoRunMatrix;
+        public int MatrixRunCount = 3;
+        public int MatrixFirstPreset;
+        public int MatrixLastPreset = 11;
+        public int MatrixPresetMask = 4095;
+        public float MatrixInterShotDelaySeconds = 2f;
 
         private const int PresetCount = 12;
+        private int _matrixRunIndex;
+        private int _matrixPresetIndex;
+        private bool _matrixShotActive;
 
         private void Start()
         {
-            if (AutoRunOnStart)
+            if (AutoRunMatrix)
+            {
+                SendCustomEventDelayedSeconds("_StartMatrix", AutoRunDelaySeconds);
+            }
+            else if (AutoRunOnStart)
             {
                 SendCustomEventDelayedSeconds("_AutoRun", AutoRunDelaySeconds);
             }
         }
 
-        public void _AutoRun()
+        public void _StartMatrix()
         {
-            if (!AutoRunOnStart || Networking.LocalPlayer == null)
+            if (!AutoRunMatrix)
             {
                 return;
             }
 
-            bool isTargetPlayer = AutoRunPlayerId > 0
-                && Networking.LocalPlayer.playerId == AutoRunPlayerId;
-            bool isTargetMaster = AutoRunPlayerId <= 0 && Networking.IsMaster;
-            if (!isTargetPlayer && !isTargetMaster)
+            if (!_IsAutoRunTarget())
             {
+                SendCustomEventDelayedSeconds("_StartMatrix", 1f);
+                return;
+            }
+
+            _matrixRunIndex = 0;
+            _matrixPresetIndex = Mathf.Clamp(MatrixFirstPreset, 0, PresetCount - 1);
+            _matrixShotActive = false;
+            _RunNextMatrixShot();
+        }
+
+        public void _PollMatrix()
+        {
+            if (!AutoRunMatrix || !_IsAutoRunTarget())
+            {
+                return;
+            }
+
+            if (NetworkState != null && NetworkState.Phase == GateballNetworkState.PhaseSimulating)
+            {
+                SendCustomEventDelayedSeconds("_PollMatrix", 0.5f);
+                return;
+            }
+
+            if (_matrixShotActive)
+            {
+                Debug.Log("[Gateball v0.2] MatrixSettled run=" + (_matrixRunIndex + 1).ToString()
+                    + " preset=" + _matrixPresetIndex.ToString()
+                    + " forced=" + (NetworkState != null && NetworkState.LastShotEndWasForced).ToString());
+                _matrixShotActive = false;
+                _matrixPresetIndex++;
+                SendCustomEventDelayedSeconds("_AdvanceMatrixAfterDelay", MatrixInterShotDelaySeconds);
+                return;
+            }
+
+            _RunNextMatrixShot();
+        }
+
+        public void _AdvanceMatrixAfterDelay()
+        {
+            if (AutoRunMatrix && _IsAutoRunTarget())
+            {
+                _RunNextMatrixShot();
+            }
+        }
+
+        public void _AutoRun()
+        {
+            if (!AutoRunOnStart)
+            {
+                return;
+            }
+
+            if (!_IsAutoRunTarget())
+            {
+                SendCustomEventDelayedSeconds("_AutoRun", 1f);
                 return;
             }
 
@@ -110,6 +176,55 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                     _LoadVeryLowSpeedTouch();
                     break;
             }
+        }
+
+        private void _RunNextMatrixShot()
+        {
+            while (_matrixRunIndex < Mathf.Max(0, MatrixRunCount)
+                && _matrixPresetIndex <= Mathf.Clamp(MatrixLastPreset, 0, PresetCount - 1)
+                && !_IsPresetIncluded(_matrixPresetIndex))
+            {
+                _matrixPresetIndex++;
+            }
+
+            if (_matrixRunIndex >= Mathf.Max(0, MatrixRunCount))
+            {
+                Debug.Log("[Gateball v0.2] MatrixComplete");
+                return;
+            }
+
+            if (_matrixPresetIndex > Mathf.Clamp(MatrixLastPreset, 0, PresetCount - 1))
+            {
+                _matrixRunIndex++;
+                _matrixPresetIndex = Mathf.Clamp(MatrixFirstPreset, 0, PresetCount - 1);
+                _RunNextMatrixShot();
+                return;
+            }
+
+            SelectedPreset = _matrixPresetIndex;
+            _matrixShotActive = true;
+            Debug.Log("[Gateball v0.2] MatrixShot run=" + (_matrixRunIndex + 1).ToString()
+                + " preset=" + SelectedPreset.ToString());
+            _RunSelectedPreset();
+            SendCustomEventDelayedSeconds("_PollMatrix", 0.5f);
+        }
+
+        private bool _IsPresetIncluded(int preset)
+        {
+            return preset >= 0 && preset < 32 && (MatrixPresetMask & (1 << preset)) != 0;
+        }
+
+        private bool _IsAutoRunTarget()
+        {
+            if (Networking.LocalPlayer == null)
+            {
+                return false;
+            }
+
+            bool isTargetPlayer = AutoRunPlayerId > 0
+                && Networking.LocalPlayer.playerId == AutoRunPlayerId;
+            bool isTargetMaster = AutoRunPlayerId <= 0 && Networking.IsMaster;
+            return isTargetPlayer || isTargetMaster;
         }
 
         public void _LoadStraightWeak()

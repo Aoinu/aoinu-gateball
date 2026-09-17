@@ -42,6 +42,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         [System.NonSerialized] public float LocalFixedDeltaTime;
         [System.NonSerialized] public float LastMaxPositionError;
         [System.NonSerialized] public float LastMeanPositionError;
+        [System.NonSerialized] public float LastMaxTrajectoryPositionError;
+        [System.NonSerialized] public float LastMeanTrajectoryPositionError;
+        [System.NonSerialized] public float LastMaxFinalPositionError;
+        [System.NonSerialized] public float LastMeanFinalPositionError;
         [System.NonSerialized] public float LastFinalPositionError;
         [System.NonSerialized] public float LastSettleTimeError;
         [System.NonSerialized] public int LastSettleStepError;
@@ -50,10 +54,13 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         [System.NonSerialized] public bool LastShotEndWasForced;
 
         private int _lastAppliedShotId = -1;
+        private int _lateJoinShotId = -1;
         private int _activeLocalShotId = -1;
         private int _lastObservedPhase = PhaseWaiting;
         private bool _initialized;
         private bool _pendingStroke;
+        private bool _pendingShotStart;
+        private bool _pendingStrokeApply;
         private int _pendingStrokeBallId;
         private Vector3 _pendingStrokeDirection;
         private float _pendingStrokeImpulse;
@@ -73,6 +80,12 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 Court._ApplyBallPositions(AuthoritativeBallPositions);
             }
 
+            if (Phase == PhaseSimulating)
+            {
+                _lateJoinShotId = ShotId;
+                _activeLocalShotId = -1;
+            }
+
             _lastAppliedShotId = ShotId;
             _lastObservedPhase = Phase;
             _initialized = true;
@@ -87,9 +100,26 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
         }
 
+        private void Update()
+        {
+            if (_initialized)
+            {
+                _TryApplyPendingShotStart();
+                _TryApplyPendingStroke();
+            }
+        }
+
         private void FixedUpdate()
         {
-            if (!_initialized || Phase != PhaseSimulating || _activeLocalShotId != ShotId || Court == null)
+            if (!_initialized)
+            {
+                return;
+            }
+
+            _TryApplyPendingShotStart();
+            _TryApplyPendingStroke();
+
+            if (Phase != PhaseSimulating || _activeLocalShotId != ShotId || Court == null)
             {
                 return;
             }
@@ -104,6 +134,21 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (Court._HasAnyBallMotion())
             {
                 _observedMotion = true;
+            }
+
+            if (LocalSimulationStep == 1 || LocalSimulationStep == 10 || LocalSimulationStep == 100
+                || LocalSimulationStep % 500 == 0)
+            {
+                Debug.Log("[Gateball v0.2] SimCheckpoint shot=" + ShotId.ToString()
+                    + " role=" + (_IsLocalOwner() ? "Owner" : "Remote")
+                    + " step=" + LocalSimulationStep.ToString()
+                    + " fixedDelta=" + LocalFixedDeltaTime.ToString()
+                    + " observed=" + _observedMotion.ToString()
+                    + " moving=" + Court._GetMovingBallCount().ToString()
+                    + " maxSpeed=" + Court._GetMaxLinearSpeed().ToString()
+                    + " maxAngularTip=" + Court._GetMaxAngularTipSpeed().ToString()
+                    + " stopped=" + Court._AreAllBallsStopped().ToString()
+                    + " settledTime=" + _settledTime.ToString());
             }
 
             bool settled = LocalSimulationStep >= MinimumSimulationSteps
@@ -165,10 +210,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (Phase == PhaseSimulating && ShotId != _lastAppliedShotId)
             {
-                _ApplyShotStart();
+                _pendingShotStart = true;
             }
             else if (Phase == PhaseSettled
-                && (_activeLocalShotId == ShotId || ShotId != _lastAppliedShotId))
+                && ShouldApplyShotEnd(Phase, ShotId, _lastAppliedShotId, _lateJoinShotId, _activeLocalShotId))
             {
                 _ApplyShotEnd();
             }
@@ -247,6 +292,28 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             return phase == PhaseWaiting || phase == PhaseSimulating || phase == PhaseSettled;
         }
 
+        public static bool ShouldApplyShotEnd(
+            int phase,
+            int shotId,
+            int lastAppliedShotId,
+            int lateJoinShotId,
+            int activeLocalShotId)
+        {
+            if (phase != PhaseSettled)
+            {
+                return false;
+            }
+
+            if (shotId < lastAppliedShotId)
+            {
+                return false;
+            }
+
+            return activeLocalShotId == shotId
+                || shotId != lastAppliedShotId
+                || lateJoinShotId == shotId;
+        }
+
         public static float CalculateMaxPositionError(Vector3[] localPositions, Vector3[] ownerPositions)
         {
             return GateballTelemetry.CalculateMaxPositionError(localPositions, ownerPositions);
@@ -280,10 +347,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             LocalFixedDeltaTime = Time.fixedDeltaTime;
             _settledTime = 0f;
             _observedMotion = false;
+            _pendingStrokeApply = false;
 
             if (Telemetry != null)
             {
-                Telemetry._BeginShot(ShotId, true);
+                Telemetry._BeginShot(ShotId, true, StrokeBallId);
             }
 
             Debug.Log("[Gateball v0.2] ShotStart shot=" + ShotId.ToString()
@@ -292,11 +360,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             _RequestSerializationIfOwner();
             Court._ApplyBallPositions(InitialBallPositions);
-            GateballBall strokeBall = Court._GetBall(StrokeBallId);
-            if (strokeBall != null)
+            if (Telemetry != null)
             {
-                strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
+                Telemetry._RecordInitialSample(Court.Balls);
             }
+            _pendingStrokeApply = true;
         }
 
         private void _ApplyShotStart()
@@ -307,6 +375,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             Court._ApplyBallPositions(InitialBallPositions);
+            _lateJoinShotId = -1;
             _activeLocalShotId = ShotId;
             LocalSimulationStep = 0;
             LocalElapsedSimulationTime = 0f;
@@ -316,18 +385,18 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (Telemetry != null)
             {
-                Telemetry._BeginShot(ShotId, false);
+                Telemetry._BeginShot(ShotId, false, StrokeBallId);
             }
 
             Debug.Log("[Gateball v0.2] RemoteShotStart shot=" + ShotId.ToString()
                 + " ball=" + StrokeBallId.ToString()
                 + " impulse=" + StrokeImpulse.ToString());
 
-            GateballBall strokeBall = Court._GetBall(StrokeBallId);
-            if (strokeBall != null)
+            if (Telemetry != null)
             {
-                strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
+                Telemetry._RecordInitialSample(Court.Balls);
             }
+            _pendingStrokeApply = true;
         }
 
         private void _FinishShot(bool forced)
@@ -335,6 +404,13 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (!_IsLocalOwner() || Court == null || Phase != PhaseSimulating)
             {
                 return;
+            }
+
+            _pendingStrokeApply = false;
+
+            if (Telemetry != null)
+            {
+                Telemetry._RecordFinalSample(Court.Balls);
             }
 
             Court._CaptureBallPositions(FinalBallPositions);
@@ -366,6 +442,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + " step=" + ShotEndSimulationStep.ToString()
                 + " elapsed=" + ShotEndElapsedSimulationTime.ToString()
                 + " events=" + ShotEndEventCount.ToString()
+                + " finalMax=" + LastMaxFinalPositionError.ToString()
+                + " finalMean=" + LastMeanFinalPositionError.ToString()
+                + " correction=" + LastFinalCorrectionDistance.ToString()
+                + " observed=" + _observedMotion.ToString()
+                + " moving=" + Court._GetMovingBallCount().ToString()
                 + " forced=" + forced.ToString());
             _RequestSerializationIfOwner();
         }
@@ -376,6 +457,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (Court != null)
             {
                 Court._CaptureBallPositions(localPositions);
+            }
+
+            if (Telemetry != null && Court != null && _activeLocalShotId == ShotId)
+            {
+                Telemetry._RecordFinalSample(Court.Balls);
             }
 
             if (Telemetry != null && _activeLocalShotId == ShotId)
@@ -393,12 +479,18 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             _ApplyAuthoritativePositions();
             _activeLocalShotId = -1;
+            _lateJoinShotId = -1;
+            _pendingShotStart = false;
+            _pendingStrokeApply = false;
             LastShotEndWasForced = ShotEndWasForced;
             Debug.Log("[Gateball v0.2] RemoteShotEnd shot=" + ShotId.ToString()
-                + " maxError=" + LastMaxPositionError.ToString()
-                + " meanError=" + LastMeanPositionError.ToString()
-                + " finalError=" + LastFinalPositionError
+                + " trajectoryMax=" + LastMaxTrajectoryPositionError.ToString()
+                + " trajectoryMean=" + LastMeanTrajectoryPositionError.ToString()
+                + " finalMax=" + LastMaxFinalPositionError.ToString()
+                + " finalMean=" + LastMeanFinalPositionError.ToString()
+                + " finalStroke=" + LastFinalPositionError.ToString()
                 + " correction=" + LastFinalCorrectionDistance.ToString()
+                + " localEvents=" + (Telemetry == null ? 0 : Telemetry.EventCount).ToString()
                 + " settleTimeError=" + LastSettleTimeError.ToString()
                 + " settleStepError=" + LastSettleStepError.ToString()
                 + " divergence=" + LastEventDivergenceCount.ToString()
@@ -413,6 +505,46 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
         }
 
+        private void _TryApplyPendingStroke()
+        {
+            if (!_pendingStrokeApply || Court == null || Phase != PhaseSimulating)
+            {
+                return;
+            }
+
+            GateballBall strokeBall = Court._GetBall(StrokeBallId);
+            if (strokeBall == null || !strokeBall._IsReady())
+            {
+                return;
+            }
+
+            _pendingStrokeApply = false;
+            strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
+            Debug.Log("[Gateball v0.2] StrokeApplied shot=" + ShotId.ToString()
+                + " role=" + (_IsLocalOwner() ? "Owner" : "Remote")
+                + " ball=" + StrokeBallId.ToString()
+                + " impulse=" + StrokeImpulse.ToString()
+                + " velocity=" + strokeBall.Body.velocity.ToString()
+                + " kinematic=" + strokeBall.Body.isKinematic.ToString());
+        }
+
+        private void _TryApplyPendingShotStart()
+        {
+            if (!_pendingShotStart || Court == null || Phase != PhaseSimulating)
+            {
+                return;
+            }
+
+            GateballBall pendingStrokeBall = Court._GetBall(StrokeBallId);
+            if (pendingStrokeBall == null || !pendingStrokeBall._IsReady())
+            {
+                return;
+            }
+
+            _pendingShotStart = false;
+            _ApplyShotStart();
+        }
+
         private void _CopyTelemetrySummary()
         {
             if (Telemetry == null)
@@ -422,6 +554,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             LastMaxPositionError = Telemetry.MaxPositionError;
             LastMeanPositionError = Telemetry.MeanPositionError;
+            LastMaxTrajectoryPositionError = Telemetry.MaxTrajectoryPositionError;
+            LastMeanTrajectoryPositionError = Telemetry.MeanTrajectoryPositionError;
+            LastMaxFinalPositionError = Telemetry.MaxFinalPositionError;
+            LastMeanFinalPositionError = Telemetry.MeanFinalPositionError;
             LastFinalPositionError = Telemetry.FinalPositionError;
             LastSettleTimeError = Telemetry.SettleTimeError;
             LastSettleStepError = Telemetry.SettleStepError;

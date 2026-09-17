@@ -5678,6 +5678,12 @@ MonoBehaviour:
   AutoRunOnStart: 0
   AutoRunPlayerId: 1
   AutoRunDelaySeconds: 2
+  AutoRunMatrix: 0
+  MatrixRunCount: 3
+  MatrixFirstPreset: 0
+  MatrixLastPreset: 11
+  MatrixPresetMask: 4095
+  MatrixInterShotDelaySeconds: 2
 --- !u!23 &2017090574
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -6141,6 +6147,7 @@ MonoBehaviour:
     SerializationNodes: []
   _udonSharpBackingUdonBehaviour: {fileID: 2117943057}
   RecordSamples: 1
+  LogAllSamples: 0
 --- !u!114 &2117943057
 MonoBehaviour:
   m_ObjectHideFlags: 0

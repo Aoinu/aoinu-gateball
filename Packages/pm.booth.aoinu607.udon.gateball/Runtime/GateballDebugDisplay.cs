@@ -35,7 +35,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + "stroke ball " + NetworkState.StrokeBallId.ToString() + " impulse " + NetworkState.StrokeImpulse.ToString() + "\n"
                 + "step " + NetworkState.LocalSimulationStep.ToString() + " fixed " + NetworkState.LocalFixedDeltaTime.ToString() + "\n"
                 + "correction " + NetworkState.LastFinalCorrectionDistance.ToString() + "\n"
-                + "max error " + NetworkState.LastMaxPositionError.ToString() + " mean " + NetworkState.LastMeanPositionError.ToString() + "\n"
+                + "trajectory max " + NetworkState.LastMaxTrajectoryPositionError.ToString()
+                + " mean " + NetworkState.LastMeanTrajectoryPositionError.ToString() + "\n"
+                + "final max " + NetworkState.LastMaxFinalPositionError.ToString()
+                + " mean " + NetworkState.LastMeanFinalPositionError.ToString()
+                + " stroke " + NetworkState.LastFinalPositionError.ToString() + "\n"
                 + "event divergence " + NetworkState.LastEventDivergenceCount.ToString();
         }
     }

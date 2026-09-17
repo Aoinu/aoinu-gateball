@@ -35,9 +35,13 @@ jobs:
             if (!(key in pkg)) throw new Error(`Missing package field: ${key}`);
           }
           if (pkg.name !== packageId) throw new Error('Package name does not match its directory');
-          if (pkg.version !== '0.1.0') throw new Error('Unexpected initial package version');
+          const semverPattern = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/;
+          if (!semverPattern.test(pkg.version)) throw new Error(`Invalid package SemVer: ${pkg.version}`);
           if (pkg.unity !== '2022.3') throw new Error('Unexpected Unity version range');
-          if (pkg.author.email !== 'aoinu@users.noreply.github.com') throw new Error('Unexpected public author email');
+          if (typeof pkg.url !== 'string' || !pkg.url.includes(pkg.version)) throw new Error('Package URL does not contain the package version');
+          const expectedArchive = `${packageId}-${pkg.version}.zip`;
+          if (!pkg.url.endsWith(expectedArchive)) throw new Error(`Package URL must end with ${expectedArchive}`);
+          if (!pkg.author || typeof pkg.author !== 'object' || !pkg.author.name || !pkg.author.email) throw new Error('Incomplete author metadata');
           if (!pkg.vpmDependencies || !pkg.vpmDependencies['com.vrchat.worlds']) throw new Error('Missing VRChat Worlds dependency');
           for (const file of [
             `${packagePath}/Runtime/Pm.Booth.Aoinu607.Udon.Gateball.asmdef`,

@@ -352,6 +352,72 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             return true;
         }
 
+        public int _GetMovingBallCount()
+        {
+            if (Balls == null)
+            {
+                return 0;
+            }
+
+            int movingCount = 0;
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball != null && ball.Body != null
+                    && !GateballGeometry.IsStopped(
+                        ball.Body.velocity,
+                        ball.Body.angularVelocity,
+                        ball.Radius,
+                        ball.StopLinearSpeed,
+                        ball.StopAngularTipSpeed))
+                {
+                    movingCount++;
+                }
+            }
+
+            return movingCount;
+        }
+
+        public float _GetMaxLinearSpeed()
+        {
+            if (Balls == null)
+            {
+                return 0f;
+            }
+
+            float maxSpeed = 0f;
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball != null && ball.Body != null)
+                {
+                    maxSpeed = Mathf.Max(maxSpeed, ball.Body.velocity.magnitude);
+                }
+            }
+
+            return maxSpeed;
+        }
+
+        public float _GetMaxAngularTipSpeed()
+        {
+            if (Balls == null)
+            {
+                return 0f;
+            }
+
+            float maxSpeed = 0f;
+            for (int i = 0; i < Balls.Length; i++)
+            {
+                GateballBall ball = Balls[i];
+                if (ball != null && ball.Body != null)
+                {
+                    maxSpeed = Mathf.Max(maxSpeed, ball.Body.angularVelocity.magnitude * ball.Radius);
+                }
+            }
+
+            return maxSpeed;
+        }
+
         public GateballBall _GetBall(int ballId)
         {
             if (!GateballGeometry.IsValidBallId(ballId) || Balls == null)
