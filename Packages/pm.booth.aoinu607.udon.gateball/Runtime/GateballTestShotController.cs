@@ -64,45 +64,52 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _LoadStraightWeak()
         {
-            _ResetAndPlaceBall(1, new Vector3(0f, 0.16f, -7.5f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(0f, GateballGeometry.BallRadius, -7.5f));
             _Stroke(1, Vector3.forward, 1.5f);
         }
 
         public void _LoadStraightStrong()
         {
-            _ResetAndPlaceBall(1, new Vector3(0f, 0.16f, -7.5f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(0f, GateballGeometry.BallRadius, -7.5f));
             _Stroke(1, Vector3.forward, 5.5f);
         }
 
         public void _LoadFrontCollision()
         {
-            _ResetAndPlaceBall(1, new Vector3(-0.55f, 0.16f, -5.5f));
-            _ResetAndPlaceBall(2, new Vector3(0.55f, 0.16f, -5.5f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(-0.55f, GateballGeometry.BallRadius, -5.5f));
+            _ResetAndPlaceBall(2, new Vector3(0.55f, GateballGeometry.BallRadius, -5.5f));
             _Stroke(1, Vector3.right, 2.2f);
         }
 
         public void _LoadGateCenter()
         {
-            _ResetAndPlaceBall(1, new Vector3(0f, 0.16f, -7.5f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(0f, GateballGeometry.BallRadius, -7.5f));
             _Stroke(1, Vector3.forward, 3.2f);
         }
 
         public void _LoadOutBoundary()
         {
-            _ResetAndPlaceBall(1, new Vector3(6.5f, 0.16f, 0f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(6.5f, GateballGeometry.BallRadius, 0f));
             _Stroke(1, Vector3.right, 3.5f);
         }
 
         public void _LoadTouch()
         {
-            _ResetAndPlaceBall(1, new Vector3(-1f, 0.16f, -5.5f));
-            _ResetAndPlaceBall(2, new Vector3(0f, 0.16f, -5.5f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(-1f, GateballGeometry.BallRadius, -5.5f));
+            _ResetAndPlaceBall(2, new Vector3(0f, GateballGeometry.BallRadius, -5.5f));
             _Stroke(1, Vector3.right, 1.4f);
         }
 
         public void _LoadGoalPole()
         {
-            _ResetAndPlaceBall(1, new Vector3(0f, 0.16f, 7.0f));
+            _PreparePreset();
+            _ResetAndPlaceBall(1, new Vector3(0f, GateballGeometry.BallRadius, 7.0f));
             _Stroke(1, Vector3.forward, 1.8f);
         }
 
@@ -122,6 +129,14 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             Court._SetBallPosition(ballId, position);
+        }
+
+        private void _PreparePreset()
+        {
+            if (Court != null)
+            {
+                Court._ResetAll();
+            }
         }
 
         private void _Stroke(int ballId, Vector3 direction, float impulse)

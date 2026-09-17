@@ -8,6 +8,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     {
         public GateballStrokeRouter StrokeRouter;
         public Transform Head;
+        public Collider HeadCollider;
         public Collider PhysicsProxy;
         public float ProxyRadius = 0.09f;
         public int BallLayer = 13;
@@ -46,7 +47,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _ResetHistory();
         }
 
-        private void Update()
+        private void FixedUpdate()
         {
             if (Head == null)
             {
@@ -69,7 +70,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private void _TrySweepHit(Vector3 previousPosition, Vector3 currentPosition)
         {
-            if (PhysicsProxy == null || !PhysicsProxy.enabled)
+            if (HeadCollider == null && (PhysicsProxy == null || !PhysicsProxy.enabled))
             {
                 return;
             }
@@ -81,22 +82,66 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
-            RaycastHit hit;
             int layerMask = 1 << BallLayer;
-            if (!Physics.SphereCast(
-                previousPosition,
-                ProxyRadius,
-                delta.normalized,
-                out hit,
-                distance,
-                layerMask,
-                QueryTriggerInteraction.Ignore))
+            RaycastHit hit = new RaycastHit();
+            bool hitDetected = false;
+            BoxCollider boxCollider = null;
+            if (HeadCollider != null)
+            {
+                boxCollider = HeadCollider.GetComponent<BoxCollider>();
+            }
+            if (boxCollider != null && HeadCollider.enabled)
+            {
+                hitDetected = Physics.BoxCast(
+                    previousPosition,
+                    boxCollider.bounds.extents,
+                    delta.normalized,
+                    out hit,
+                    Head.rotation,
+                    distance,
+                    layerMask,
+                    QueryTriggerInteraction.Ignore);
+            }
+            else if (PhysicsProxy != null && PhysicsProxy.enabled)
+            {
+                hitDetected = Physics.SphereCast(
+                    previousPosition,
+                    ProxyRadius,
+                    delta.normalized,
+                    out hit,
+                    distance,
+                    layerMask,
+                    QueryTriggerInteraction.Ignore);
+            }
+
+            if (!hitDetected)
             {
                 return;
             }
 
             GateballBall ball = hit.collider.GetComponent<GateballBall>();
-            if (ball == null || ball.BallId == _lastHitBallId && Time.time - _lastHitTime < HitCooldown)
+            _TryHitBall(ball);
+        }
+
+        public void OnTriggerEnter(Collider other)
+        {
+            if (other != null)
+            {
+                _TryHitBall(other.GetComponent<GateballBall>());
+            }
+        }
+
+        public void OnCollisionEnter(Collision collision)
+        {
+            if (collision != null && collision.collider != null)
+            {
+                _TryHitBall(collision.collider.GetComponent<GateballBall>());
+            }
+        }
+
+        private void _TryHitBall(GateballBall ball)
+        {
+            if (ball == null || ball.BallId == _lastHitBallId && Time.fixedTime - _lastHitTime < HitCooldown)
             {
                 return;
             }
@@ -119,7 +164,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             {
                 StrokeRouter._ApplyStrokeToBall(ball, direction, impulse);
                 _lastHitBallId = ball.BallId;
-                _lastHitTime = Time.time;
+                _lastHitTime = Time.fixedTime;
             }
         }
 
@@ -131,7 +176,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             int oldestIndex = (_historyIndex - _historyCount + HistorySize) % HistorySize;
-            float elapsed = Time.time - _historyTimes[oldestIndex];
+            float elapsed = Time.fixedTime - _historyTimes[oldestIndex];
             if (elapsed < 0.0001f)
             {
                 return Vector3.zero;
@@ -143,7 +188,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private void _RecordPosition(Vector3 position)
         {
             _historyPositions[_historyIndex] = position;
-            _historyTimes[_historyIndex] = Time.time;
+            _historyTimes[_historyIndex] = Time.fixedTime;
             _historyIndex = (_historyIndex + 1) % HistorySize;
             if (_historyCount < HistorySize)
             {

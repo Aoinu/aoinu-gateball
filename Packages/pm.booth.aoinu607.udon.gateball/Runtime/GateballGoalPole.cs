@@ -4,7 +4,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 {
     public class GateballGoalPole : UdonSharpBehaviour
     {
-        public float Radius = 0.08f;
-        public float Height = 1.3f;
+        public float Radius = GateballGeometry.GoalPoleRadius;
+        public float Height = GateballGeometry.GoalPoleHeight;
     }
 }

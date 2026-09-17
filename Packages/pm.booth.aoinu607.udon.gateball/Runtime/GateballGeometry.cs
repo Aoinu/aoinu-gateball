@@ -7,6 +7,19 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public const int BallCount = 10;
         public const int GateCount = 3;
 
+        public const float BallDiameter = 0.075f;
+        public const float BallRadius = BallDiameter * 0.5f;
+        public const float BallMass = 0.230f;
+        public const float GateOpeningWidth = 0.22f;
+        public const float GateOpeningHeight = 0.19f;
+        public const float GatePostDiameter = 0.02f;
+        public const float GatePostHeight = 0.20f;
+        public const float GoalPoleDiameter = 0.02f;
+        public const float GoalPoleRadius = GoalPoleDiameter * 0.5f;
+        public const float GoalPoleHeight = 0.20f;
+        public const float CourtWidth = 15f;
+        public const float CourtLength = 20f;
+
         public static bool IsValidBallId(int ballId)
         {
             return ballId >= 1 && ballId <= BallCount;
@@ -65,7 +78,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             crossingPoint = Vector3.Lerp(previousPosition, currentPosition, interpolation);
 
             float halfWidth = openingWidth * 0.5f - ballRadius;
-            if (halfWidth <= 0f || openingHeight <= ballRadius)
+            float minimumCenterHeight = ballRadius;
+            float maximumCenterHeight = openingHeight - ballRadius;
+            if (halfWidth < 0f || maximumCenterHeight < minimumCenterHeight)
             {
                 return false;
             }
@@ -73,8 +88,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             float horizontalOffset = Vector3.Dot(crossingPoint - gateCenter, right);
             float verticalOffset = crossingPoint.y - gateCenter.y;
             return Mathf.Abs(horizontalOffset) <= halfWidth
-                && verticalOffset >= -ballRadius
-                && verticalOffset <= openingHeight + ballRadius;
+                && verticalOffset >= minimumCenterHeight
+                && verticalOffset <= maximumCenterHeight;
         }
 
         public static bool IsOutOfCourt(Vector3 localPosition, float courtWidth, float courtLength, float margin)

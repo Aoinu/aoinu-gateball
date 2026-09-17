@@ -13,6 +13,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public GateballCourt Court;
         public Rigidbody Body;
 
+        [Header("Physical Dimensions")]
+        public float Radius = GateballGeometry.BallRadius;
+
         [Header("Stopping")]
         public float StopLinearSpeed = 0.03f;
         public float StopAngularTipSpeed = 0.02f;
@@ -48,7 +51,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
         }
 
-        private void Update()
+        private void FixedUpdate()
         {
             if (!_initialized || Body == null)
             {
@@ -58,7 +61,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             bool stopped = GateballGeometry.IsStopped(
                 Body.velocity,
                 Body.angularVelocity,
-                transform.lossyScale.x * 0.5f,
+                Radius,
                 StopLinearSpeed,
                 StopAngularTipSpeed);
 
@@ -74,7 +77,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
-            _stillTime += Time.deltaTime;
+            _stillTime += Time.fixedDeltaTime;
             if (_stillTime >= StopDelay)
             {
                 _StopAndNotify();

@@ -123,15 +123,17 @@ public static class GateballDevelopmentSceneBuilder
         GameObject courtObject = new GameObject("Court");
         courtObject.transform.SetParent(root.transform, false);
         GateballCourt court = courtObject.AddUdonSharpComponent<GateballCourt>();
-        court.CourtWidth = 15f;
-        court.CourtLength = 20f;
+        court.CourtWidth = GateballGeometry.CourtWidth;
+        court.CourtLength = GateballGeometry.CourtLength;
         court.OutMargin = 0.35f;
 
-        CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(15f, 0.20f, 20f), floorMaterial, EnvironmentLayer);
-        CreateBoundary(courtObject.transform, "BoundaryWest", new Vector3(-7.65f, 0.20f, 0f), new Vector3(0.30f, 0.60f, 20.60f), boundaryMaterial);
-        CreateBoundary(courtObject.transform, "BoundaryEast", new Vector3(7.65f, 0.20f, 0f), new Vector3(0.30f, 0.60f, 20.60f), boundaryMaterial);
-        CreateBoundary(courtObject.transform, "BoundarySouth", new Vector3(0f, 0.20f, -10.15f), new Vector3(15.60f, 0.60f, 0.30f), boundaryMaterial);
-        CreateBoundary(courtObject.transform, "BoundaryNorth", new Vector3(0f, 0.20f, 10.15f), new Vector3(15.60f, 0.60f, 0.30f), boundaryMaterial);
+        CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(GateballGeometry.CourtWidth, 0.20f, GateballGeometry.CourtLength), floorMaterial, EnvironmentLayer);
+        float halfCourtWidth = GateballGeometry.CourtWidth * 0.5f;
+        float halfCourtLength = GateballGeometry.CourtLength * 0.5f;
+        CreateBoundary(courtObject.transform, "BoundaryWest", new Vector3(-halfCourtWidth - 0.01f, 0.10f, 0f), new Vector3(0.02f, 0.20f, GateballGeometry.CourtLength + 0.02f), boundaryMaterial);
+        CreateBoundary(courtObject.transform, "BoundaryEast", new Vector3(halfCourtWidth + 0.01f, 0.10f, 0f), new Vector3(0.02f, 0.20f, GateballGeometry.CourtLength + 0.02f), boundaryMaterial);
+        CreateBoundary(courtObject.transform, "BoundarySouth", new Vector3(0f, 0.10f, -halfCourtLength - 0.01f), new Vector3(GateballGeometry.CourtWidth + 0.02f, 0.20f, 0.02f), boundaryMaterial);
+        CreateBoundary(courtObject.transform, "BoundaryNorth", new Vector3(0f, 0.10f, halfCourtLength + 0.01f), new Vector3(GateballGeometry.CourtWidth + 0.02f, 0.20f, 0.02f), boundaryMaterial);
 
         GateballGate[] gates = new GateballGate[3];
         for (int i = 0; i < gates.Length; i++)
@@ -139,10 +141,10 @@ public static class GateballDevelopmentSceneBuilder
             gates[i] = CreateGate(courtObject.transform, i, new Vector3(0f, 0f, -4f + i * 4f), gateMaterial);
         }
 
-        GameObject poleObject = CreatePrimitive("GoalPole", PrimitiveType.Cylinder, courtObject.transform, new Vector3(0f, 0.65f, 8.7f), new Vector3(0.16f, 0.65f, 0.16f), poleMaterial, EnvironmentLayer);
+        GameObject poleObject = CreatePrimitive("GoalPole", PrimitiveType.Cylinder, courtObject.transform, new Vector3(0f, GateballGeometry.GoalPoleHeight * 0.5f, 8.7f), new Vector3(GateballGeometry.GoalPoleDiameter, GateballGeometry.GoalPoleHeight * 0.5f, GateballGeometry.GoalPoleDiameter), poleMaterial, EnvironmentLayer);
         GateballGoalPole goalPole = poleObject.AddUdonSharpComponent<GateballGoalPole>();
-        goalPole.Radius = 0.08f;
-        goalPole.Height = 1.3f;
+        goalPole.Radius = GateballGeometry.GoalPoleRadius;
+        goalPole.Height = GateballGeometry.GoalPoleHeight;
         court.GoalPole = goalPole;
 
         GameObject ballsRoot = new GameObject("Balls");
@@ -157,15 +159,15 @@ public static class GateballDevelopmentSceneBuilder
                 "Ball" + ballId.ToString("00"),
                 PrimitiveType.Sphere,
                 ballsRoot.transform,
-                new Vector3(x, 0.16f, z),
-                Vector3.one * 0.32f,
+                new Vector3(x, GateballGeometry.BallRadius, z),
+                Vector3.one * GateballGeometry.BallDiameter,
                 ballId % 2 == 1 ? redMaterial : whiteMaterial,
                 PickupLayer);
 
             SphereCollider sphereCollider = ballObject.GetComponent<SphereCollider>();
             sphereCollider.material = GetOrCreatePhysicsMaterial();
             Rigidbody body = ballObject.AddComponent<Rigidbody>();
-            body.mass = 0.45f;
+            body.mass = GateballGeometry.BallMass;
             body.drag = 0.20f;
             body.angularDrag = 0.05f;
             body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
@@ -176,6 +178,7 @@ public static class GateballDevelopmentSceneBuilder
             ball.BallId = ballId;
             ball.Court = court;
             ball.Body = body;
+            ball.Radius = GateballGeometry.BallRadius;
             balls[i] = ball;
         }
 
@@ -204,8 +207,9 @@ public static class GateballDevelopmentSceneBuilder
         GateballMallet mallet = malletObject.AddUdonSharpComponent<GateballMallet>();
         mallet.StrokeRouter = router;
         mallet.Head = headObject.transform;
+        mallet.HeadCollider = headObject.GetComponent<Collider>();
         mallet.PhysicsProxy = proxyCollider;
-        mallet.ProxyRadius = 0.09f;
+        mallet.ProxyRadius = GateballGeometry.BallRadius + 0.02f;
         mallet.BallLayer = PickupLayer;
         mallet.StrikeScale = 0.45f;
         mallet.MaximumImpulse = 7f;
@@ -243,19 +247,20 @@ public static class GateballDevelopmentSceneBuilder
         gateObject.transform.localPosition = position;
         GateballGate gate = gateObject.AddUdonSharpComponent<GateballGate>();
         gate.GateIndex = gateIndex;
-        gate.OpeningWidth = 1.2f;
-        gate.OpeningHeight = 0.45f;
-        gate.BallRadius = 0.12f;
+        gate.OpeningWidth = GateballGeometry.GateOpeningWidth;
+        gate.OpeningHeight = GateballGeometry.GateOpeningHeight;
+        gate.BallRadius = GateballGeometry.BallRadius;
 
-        CreateGatePost(gateObject.transform, "LeftPost", gateIndex, new Vector3(-0.66f, 0.22f, 0f), material);
-        CreateGatePost(gateObject.transform, "RightPost", gateIndex, new Vector3(0.66f, 0.22f, 0f), material);
-        CreatePrimitive("TopBar", PrimitiveType.Cube, gateObject.transform, new Vector3(0f, 0.46f, 0f), new Vector3(1.45f, 0.08f, 0.10f), material, EnvironmentLayer);
+        float postCenterOffset = GateballGeometry.GateOpeningWidth * 0.5f + GateballGeometry.GatePostDiameter * 0.5f;
+        CreateGatePost(gateObject.transform, "LeftPost", gateIndex, new Vector3(-postCenterOffset, GateballGeometry.GatePostHeight * 0.5f, 0f), material);
+        CreateGatePost(gateObject.transform, "RightPost", gateIndex, new Vector3(postCenterOffset, GateballGeometry.GatePostHeight * 0.5f, 0f), material);
+        CreatePrimitive("TopBar", PrimitiveType.Cube, gateObject.transform, new Vector3(0f, GateballGeometry.GateOpeningHeight + GateballGeometry.GatePostDiameter * 0.5f, 0f), new Vector3(GateballGeometry.GateOpeningWidth + GateballGeometry.GatePostDiameter * 2f, GateballGeometry.GatePostDiameter, GateballGeometry.GatePostDiameter), material, EnvironmentLayer);
         return gate;
     }
 
     private static void CreateGatePost(Transform parent, string name, int gateIndex, Vector3 position, Material material)
     {
-        GameObject post = CreatePrimitive(name, PrimitiveType.Cylinder, parent, position, new Vector3(0.14f, 0.22f, 0.14f), material, EnvironmentLayer);
+        GameObject post = CreatePrimitive(name, PrimitiveType.Cylinder, parent, position, new Vector3(GateballGeometry.GatePostDiameter, GateballGeometry.GatePostHeight * 0.5f, GateballGeometry.GatePostDiameter), material, EnvironmentLayer);
         GateballGatePost gatePost = post.AddUdonSharpComponent<GateballGatePost>();
         gatePost.GateIndex = gateIndex;
     }

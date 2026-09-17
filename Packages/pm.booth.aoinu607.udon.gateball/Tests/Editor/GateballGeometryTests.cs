@@ -18,30 +18,45 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         }
 
         [Test]
+        public void PhysicalDimensionsMatchLocalGateballSpecification()
+        {
+            Assert.AreEqual(0.075f, GateballGeometry.BallDiameter, 0.000001f);
+            Assert.AreEqual(0.230f, GateballGeometry.BallMass, 0.000001f);
+            Assert.AreEqual(0.22f, GateballGeometry.GateOpeningWidth, 0.000001f);
+            Assert.AreEqual(0.19f, GateballGeometry.GateOpeningHeight, 0.000001f);
+            Assert.AreEqual(0.02f, GateballGeometry.GatePostDiameter, 0.000001f);
+            Assert.AreEqual(0.20f, GateballGeometry.GatePostHeight, 0.000001f);
+            Assert.AreEqual(0.02f, GateballGeometry.GoalPoleDiameter, 0.000001f);
+            Assert.AreEqual(0.20f, GateballGeometry.GoalPoleHeight, 0.000001f);
+            Assert.AreEqual(15f, GateballGeometry.CourtWidth, 0.000001f);
+            Assert.AreEqual(20f, GateballGeometry.CourtLength, 0.000001f);
+        }
+
+        [Test]
         public void GateGeometryDetectsForwardAndReverseCrossings()
         {
             Vector3 crossingPoint;
             bool forward = GateballGeometry.TryGetGateCrossing(
-                new Vector3(0f, 0.16f, -1f),
-                new Vector3(0f, 0.16f, 1f),
+                new Vector3(0f, 0.10f, -1f),
+                new Vector3(0f, 0.10f, 1f),
                 Vector3.zero,
                 Vector3.forward,
                 Vector3.right,
-                1.2f,
-                0.45f,
-                0.12f,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
                 true,
                 out crossingPoint);
 
             bool reverse = GateballGeometry.TryGetGateCrossing(
-                new Vector3(0f, 0.16f, 1f),
-                new Vector3(0f, 0.16f, -1f),
+                new Vector3(0f, 0.10f, 1f),
+                new Vector3(0f, 0.10f, -1f),
                 Vector3.zero,
                 Vector3.forward,
                 Vector3.right,
-                1.2f,
-                0.45f,
-                0.12f,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
                 false,
                 out crossingPoint);
 
@@ -51,22 +66,66 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         }
 
         [Test]
-        public void GateGeometryRejectsCrossingOutsideOpening()
+        public void GateGeometryAccountsForBallRadiusAtOpeningEdges()
         {
             Vector3 crossingPoint;
-            bool result = GateballGeometry.TryGetGateCrossing(
-                new Vector3(0.7f, 0.16f, -1f),
-                new Vector3(0.7f, 0.16f, 1f),
+            bool horizontalEdge = GateballGeometry.TryGetGateCrossing(
+                new Vector3(GateballGeometry.GateOpeningWidth * 0.5f - GateballGeometry.BallRadius, 0.10f, -1f),
+                new Vector3(GateballGeometry.GateOpeningWidth * 0.5f - GateballGeometry.BallRadius, 0.10f, 1f),
                 Vector3.zero,
                 Vector3.forward,
                 Vector3.right,
-                1.2f,
-                0.45f,
-                0.12f,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
                 true,
                 out crossingPoint);
 
-            Assert.IsFalse(result);
+            bool outsideHorizontalEdge = GateballGeometry.TryGetGateCrossing(
+                new Vector3(GateballGeometry.GateOpeningWidth * 0.5f - GateballGeometry.BallRadius + 0.001f, 0.10f, -1f),
+                new Vector3(GateballGeometry.GateOpeningWidth * 0.5f - GateballGeometry.BallRadius + 0.001f, 0.10f, 1f),
+                Vector3.zero,
+                Vector3.forward,
+                Vector3.right,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
+                true,
+                out crossingPoint);
+
+            Assert.IsTrue(horizontalEdge);
+            Assert.IsFalse(outsideHorizontalEdge);
+        }
+
+        [Test]
+        public void GateGeometryRejectsAboveBarAndBelowFloorCases()
+        {
+            Vector3 crossingPoint;
+            bool aboveBar = GateballGeometry.TryGetGateCrossing(
+                new Vector3(0f, GateballGeometry.GateOpeningHeight - GateballGeometry.BallRadius + 0.001f, -1f),
+                new Vector3(0f, GateballGeometry.GateOpeningHeight - GateballGeometry.BallRadius + 0.001f, 1f),
+                Vector3.zero,
+                Vector3.forward,
+                Vector3.right,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
+                true,
+                out crossingPoint);
+            bool belowFloor = GateballGeometry.TryGetGateCrossing(
+                new Vector3(0f, GateballGeometry.BallRadius - 0.001f, -1f),
+                new Vector3(0f, GateballGeometry.BallRadius - 0.001f, 1f),
+                Vector3.zero,
+                Vector3.forward,
+                Vector3.right,
+                GateballGeometry.GateOpeningWidth,
+                GateballGeometry.GateOpeningHeight,
+                GateballGeometry.BallRadius,
+                true,
+                out crossingPoint);
+
+            Assert.IsFalse(aboveBar);
+            Assert.IsFalse(belowFloor);
         }
 
         [Test]
@@ -77,13 +136,13 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             Assert.IsTrue(GateballGeometry.IsStopped(
                 new Vector3(0.02f, 0f, 0f),
                 new Vector3(0f, 0.1f, 0f),
-                0.12f,
+                GateballGeometry.BallRadius,
                 0.03f,
                 0.02f));
             Assert.IsFalse(GateballGeometry.IsStopped(
                 new Vector3(0.2f, 0f, 0f),
                 Vector3.zero,
-                0.12f,
+                GateballGeometry.BallRadius,
                 0.03f,
                 0.02f));
         }
@@ -93,31 +152,31 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         {
             Assert.IsTrue(GateballGeometry.IsBallTouchingBall(
                 Vector3.zero,
-                new Vector3(0.3f, 0f, 0f),
-                0.16f,
-                0.16f));
+                new Vector3(0.075f, 0f, 0f),
+                GateballGeometry.BallRadius,
+                GateballGeometry.BallRadius));
             Assert.IsFalse(GateballGeometry.IsBallTouchingBall(
                 Vector3.zero,
-                new Vector3(0.5f, 0f, 0f),
-                0.16f,
-                0.16f));
+                new Vector3(0.08f, 0f, 0f),
+                GateballGeometry.BallRadius,
+                GateballGeometry.BallRadius));
         }
 
         [Test]
         public void GoalPoleContactUsesHorizontalAndVerticalBounds()
         {
             Assert.IsTrue(GateballGeometry.IsBallTouchingVerticalPole(
-                new Vector3(0.2f, 0.16f, 0f),
-                new Vector3(0f, 0.65f, 0f),
-                0.16f,
-                0.08f,
-                1.3f));
+                new Vector3(0.0475f, 0.10f, 0f),
+                new Vector3(0f, 0.10f, 0f),
+                GateballGeometry.BallRadius,
+                GateballGeometry.GoalPoleRadius,
+                GateballGeometry.GoalPoleHeight));
             Assert.IsFalse(GateballGeometry.IsBallTouchingVerticalPole(
-                new Vector3(0.3f, 0.16f, 0f),
-                new Vector3(0f, 0.65f, 0f),
-                0.16f,
-                0.08f,
-                1.3f));
+                new Vector3(0.0485f, 0.10f, 0f),
+                new Vector3(0f, 0.10f, 0f),
+                GateballGeometry.BallRadius,
+                GateballGeometry.GoalPoleRadius,
+                GateballGeometry.GoalPoleHeight));
         }
 
         [Test]

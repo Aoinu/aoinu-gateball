@@ -3,6 +3,7 @@
   "rootNamespace": "Pm.Booth.Aoinu607.Udon.Gateball.Tests",
   "references": [
     "UnityEngine.TestRunner",
+    "UdonSharp.Runtime",
     "Pm.Booth.Aoinu607.Udon.Gateball"
   ],
   "includePlatforms": [],

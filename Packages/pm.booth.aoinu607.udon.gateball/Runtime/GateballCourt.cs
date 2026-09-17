@@ -7,8 +7,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     public class GateballCourt : UdonSharpBehaviour
     {
         [Header("Court")]
-        public float CourtWidth = 15f;
-        public float CourtLength = 20f;
+        public float CourtWidth = GateballGeometry.CourtWidth;
+        public float CourtLength = GateballGeometry.CourtLength;
         public float OutMargin = 0.35f;
 
         [Header("Scene References")]
@@ -73,7 +73,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _initialized = true;
         }
 
-        private void Update()
+        private void FixedUpdate()
         {
             if (!_initialized || Balls == null)
             {
@@ -180,8 +180,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
-            _goalPoleHits[index] = true;
-            _goalPoleCollisionCounts[index]++;
+            if (!_goalPoleHits[index])
+            {
+                _goalPoleHits[index] = true;
+                _goalPoleCollisionCounts[index]++;
+            }
         }
 
         public void _ResetAll()
@@ -375,7 +378,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
-            float ballRadius = ball.transform.lossyScale.x * 0.5f;
+            float ballRadius = ball.Radius;
             if (GateballGeometry.IsBallTouchingVerticalPole(
                 ball.transform.position,
                 GoalPole.transform.position,
