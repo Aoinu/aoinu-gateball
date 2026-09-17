@@ -9,6 +9,27 @@ This repository is the Unity 2022.3.22f1 development project and embedded VPM pa
 - `Assets/SerializedUdonPrograms/` is generated and ignored; do not hand-edit or commit it.
 - `Packages/manifest.json`, `packages-lock.json`, and `vpm-manifest.json` define dependencies. SDK packages and UnityMCP are development dependencies, not package contents.
 
+## Scope and Simplicity
+
+Implement only the requested outcome and the changes required for it to work correctly. Before adding code, check whether the behavior is needed now, already exists in the repository, or is covered by Unity, UdonSharp, VRChat SDK, the C# standard library, or an installed dependency.
+
+- Prefer updating the existing execution path over adding a parallel path.
+- Do not turn adjacent improvements, hypothetical risks, or possible future requirements into current work. Report unrelated findings without investigating or fixing them.
+- Do not add abstractions, interfaces, wrappers, factories, managers, configuration options, extension points, or compatibility layers without a current concrete need. An interface with one implementation requires specific justification.
+- Do not add a dependency when the repository can already solve the problem directly.
+- Prefer deletion, direct control flow, and explicit ownership over additional layers. Use the fewest files consistent with the repository's one-public-type-per-file rule.
+- Avoid unrelated refactors, renames, formatting changes, and cleanup.
+- If completing the request requires a material scope expansion, stop and ask before proceeding.
+
+## Execution and Verification
+
+- Work as a single agent by default. Do not delegate or spawn subagents unless the user explicitly requests it or the task contains genuinely independent, bounded work that materially benefits from parallel execution.
+- For bug fixes, trace the relevant Unity event, UdonSharp call, or data flow and fix the root cause in the shared owner rather than adding guards to individual symptoms.
+- Add or change tests only for a concrete, plausible regression in behavior or an owned contract. Prefer extending an existing focused test over introducing new fixtures, helpers, frameworks, or test-only production hooks.
+- Run the smallest relevant validation first. Broaden or repeat validation only after a failure, a material code change, or a concrete unresolved concern.
+- Do not create speculative validation, audit, review, documentation, or hardening loops after the requested acceptance criteria pass.
+- Stop when the requested outcome is implemented, the relevant checks pass, and no unresolved issue can materially change that result.
+
 ## Build, Test, and Development
 
 Open the project with Unity 2022.3.22f1 and wait for imports and UdonSharp compilation to finish. Use **Aoinu Gateball > Build Development Scene** when regenerating the harness, **Window > General > Test Runner** for EditMode/PlayMode tests, and the VRChat SDK Builder for **Build & Test**. GitHub Actions validates package metadata and credential signatures.
