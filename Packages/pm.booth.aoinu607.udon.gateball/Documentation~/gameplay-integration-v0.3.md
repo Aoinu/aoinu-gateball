@@ -174,7 +174,7 @@ placement position, and no striker Gate/Out/Goal/Touch mutation.
 | UdonSharp compile | PASS | Unity compile status: succeeded, 0 errors. |
 | EditMode | PASS | Unity Test Runner: 29/29 passed. |
 | PlayMode | PASS | Unity Test Runner: 14/14 passed. |
-| Repository validation / CI | BLOCKED | Local static checks pass. The latest remote Validate Repository run is PASS for baseline commit `c3376b6` ([run 35315432014](https://github.com/Aoinu/aoinu-gateball/actions/runs/35315432014)), but this fix round has not yet run in GitHub Actions. |
+| Repository validation / CI | PASS | Local static checks pass. GitHub Actions Validate Repository passed for this fix round at commit `d6e5d59` ([run 35342343062](https://github.com/Aoinu/aoinu-gateball/actions/runs/35342343062)). |
 
 **BLOCKED / MODIFY:** the Spark implementation and automated regressions pass,
 but v0.3 cannot be formally closed because interactive two-client gameplay,
@@ -197,5 +197,5 @@ UdonSharp compile: succeeded, 0 errors (Unity 2022.3.22f1, 2026-09-18)
 EditMode tests: passed, 29/29
 PlayMode tests: passed, 14/14
 VRChat SDK World Builder Build & Test: task completed successfully with `NumClients=2`; two VRChat processes loaded the local `VRCDefaultWorldScene`. A retry with explicit windowed arguments also exposed no top-level window/input surface, so interactive gameplay was not claimed.
-Repository validation: package metadata passed, credential-signature scan passed with no matches, and `git diff --check` passed for text changes. The latest remote Validate Repository run for baseline `c3376b6` passed; this fix round has not yet run remotely.
+Repository validation: package metadata passed, credential-signature scan passed with no matches, and `git diff --check` passed for text changes. GitHub Actions Validate Repository passed for commit `d6e5d59` (run `35342343062`).
 ```
