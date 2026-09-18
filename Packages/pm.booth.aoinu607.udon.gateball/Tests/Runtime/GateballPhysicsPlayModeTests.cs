@@ -168,7 +168,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             testShot._LoadStraightWeak();
             Vector3 firstInitialPosition = balls[0].Body.position;
             Vector3 firstInitialVelocity = balls[0].Body.velocity;
-            yield return new WaitForSeconds(0.2f);
+            for (int i = 0; i < 10; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
             Vector3 firstShotFinalPosition = balls[0].Body.position;
             Vector3 firstShotFinalVelocity = balls[0].Body.velocity;
 
@@ -181,7 +184,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             testShot._LoadStraightWeak();
             Vector3 secondInitialPosition = balls[0].Body.position;
             Vector3 secondInitialVelocity = balls[0].Body.velocity;
-            yield return new WaitForSeconds(0.2f);
+            for (int i = 0; i < 10; i++)
+            {
+                yield return new WaitForFixedUpdate();
+            }
 
             Assert.That(Vector3.Distance(firstInitialPosition, secondInitialPosition), Is.LessThan(0.0001f));
             Assert.That(Vector3.Distance(firstInitialVelocity, secondInitialVelocity), Is.LessThan(0.0001f));

@@ -11,6 +11,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         public GateballCourt Court;
         public GateballStrokeRouter StrokeRouter;
         public GateballNetworkState NetworkState;
+        public GateballGameplayState Gameplay;
         public int SelectedPreset;
         public bool DebugMode;
         public bool AutoRunOnStart;
@@ -144,6 +145,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _RunSelectedPreset()
         {
+            if (Gameplay != null && Gameplay.GameplayPhase == GateballGameplayRules.PhaseSetup)
+            {
+                Gameplay._StartPractice();
+            }
+
             if (NetworkState != null && NetworkState.Phase == GateballNetworkState.PhaseSimulating)
             {
                 return;

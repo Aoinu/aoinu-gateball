@@ -1,10 +1,10 @@
 {
   "name": "pm.booth.aoinu607.udon.gateball",
   "displayName": "Aoinu Gateball",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "unity": "2022.3",
   "description": "A VRChat gateball gimmick with a VPM package workflow.",
-  "url": "https://github.com/Aoinu/aoinu-gateball/releases/download/0.2.0/pm.booth.aoinu607.udon.gateball-0.2.0.zip",
+  "url": "https://github.com/Aoinu/aoinu-gateball/releases/download/0.3.0/pm.booth.aoinu607.udon.gateball-0.3.0.zip",
   "changelogUrl": "https://github.com/Aoinu/aoinu-gateball/blob/main/CHANGELOG.md",
   "documentationUrl": "https://github.com/Aoinu/aoinu-gateball/blob/main/README.md",
   "license": "MIT",

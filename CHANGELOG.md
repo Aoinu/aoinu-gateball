@@ -4,6 +4,7 @@ Changes to the public package are recorded here. Release entries are created by 
 
 ## [Unreleased]
 
+- Added the v0.3 gameplay integration prototype: Practice/Match modes, deterministic ten-ball player assignment, authoritative turns, Gate progression and score, Touch/Spark flow, Out recovery, late-join state, disconnect recovery, GameOver, and gameplay UI state.
 - Added the v0.2 distributed-physics PoC: manually synchronized ShotStart/ShotEnd state, local Rigidbody simulation, owner-only settlement, local telemetry, event divergence comparison, late-join authoritative reconstruction, and the 12-shot development fixture set.
 - Added the initial VPM package structure and Unity development project policy.
 - Added public-repository validation and VPM listing workflows.

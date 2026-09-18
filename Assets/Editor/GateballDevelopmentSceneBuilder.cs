@@ -11,6 +11,9 @@ using GateballGoalPole = Pm.Booth.Aoinu607.Udon.Gateball.GateballGoalPole;
 using GateballMallet = Pm.Booth.Aoinu607.Udon.Gateball.GateballMallet;
 using GateballDebugDisplay = Pm.Booth.Aoinu607.Udon.Gateball.GateballDebugDisplay;
 using GateballNetworkState = Pm.Booth.Aoinu607.Udon.Gateball.GateballNetworkState;
+using GateballGameplayState = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayState;
+using GateballGameplayControls = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayControls;
+using GateballGameplayRules = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayRules;
 using GateballStrokeRouter = Pm.Booth.Aoinu607.Udon.Gateball.GateballStrokeRouter;
 using GateballTestShotController = Pm.Booth.Aoinu607.Udon.Gateball.GateballTestShotController;
 using GateballTelemetry = Pm.Booth.Aoinu607.Udon.Gateball.GateballTelemetry;
@@ -134,8 +137,12 @@ public static class GateballDevelopmentSceneBuilder
 
         GateballTelemetry telemetry = CreateUdonObject<GateballTelemetry>(root.transform, "Telemetry");
         GateballNetworkState networkState = CreateUdonObject<GateballNetworkState>(root.transform, "NetworkState");
+        GateballGameplayState gameplay = networkState.gameObject.AddUdonSharpComponent<GateballGameplayState>();
         networkState.Court = court;
         networkState.Telemetry = telemetry;
+        networkState.Gameplay = gameplay;
+        gameplay.Court = court;
+        gameplay.NetworkState = networkState;
         court.Telemetry = telemetry;
 
         CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(GateballGeometry.CourtWidth, 0.20f, GateballGeometry.CourtLength), floorMaterial, EnvironmentLayer);
@@ -235,11 +242,27 @@ public static class GateballDevelopmentSceneBuilder
         desktop.MinimumPower = GateballGeometry.WeakStrokeImpulse;
         desktop.MaximumPower = GateballGeometry.StrongStrokeImpulse;
 
+        GameObject practiceObject = CreatePrimitive("PracticeMode", PrimitiveType.Cube, root.transform, new Vector3(-2.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
+        GateballGameplayControls practiceControls = practiceObject.AddUdonSharpComponent<GateballGameplayControls>();
+        practiceControls.GameplayState = gameplay;
+        practiceControls.Mode = GateballGameplayRules.ModePractice;
+
+        GameObject matchObject = CreatePrimitive("MatchMode", PrimitiveType.Cube, root.transform, new Vector3(2.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
+        GateballGameplayControls matchControls = matchObject.AddUdonSharpComponent<GateballGameplayControls>();
+        matchControls.GameplayState = gameplay;
+        matchControls.Mode = GateballGameplayRules.ModeMatch;
+
+        GameObject sparkObject = CreatePrimitive("SparkPlacement", PrimitiveType.Cube, root.transform, new Vector3(0.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
+        GateballGameplayControls sparkControls = sparkObject.AddUdonSharpComponent<GateballGameplayControls>();
+        sparkControls.GameplayState = gameplay;
+        sparkControls.Mode = GateballGameplayRules.ModePractice;
+
         GameObject testShotObject = CreatePrimitive("TestShotController", PrimitiveType.Cube, root.transform, new Vector3(4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballTestShotController testShot = testShotObject.AddUdonSharpComponent<GateballTestShotController>();
         testShot.Court = court;
         testShot.StrokeRouter = router;
         testShot.NetworkState = networkState;
+        testShot.Gameplay = gameplay;
         testShot.AutoRunOnStart = false;
         testShot.AutoRunPlayerId = 1;
         testShot.AutoRunDelaySeconds = 2f;
@@ -264,6 +287,7 @@ public static class GateballDevelopmentSceneBuilder
         debugText.verticalOverflow = VerticalWrapMode.Overflow;
         GateballDebugDisplay debugDisplay = debugTextObject.AddUdonSharpComponent<GateballDebugDisplay>();
         debugDisplay.NetworkState = networkState;
+        debugDisplay.Gameplay = gameplay;
         debugDisplay.Telemetry = telemetry;
         debugDisplay.Text = debugText;
 
@@ -275,6 +299,10 @@ public static class GateballDevelopmentSceneBuilder
         EditorUtility.SetDirty(testShot);
         EditorUtility.SetDirty(telemetry);
         EditorUtility.SetDirty(networkState);
+        EditorUtility.SetDirty(gameplay);
+        EditorUtility.SetDirty(practiceControls);
+        EditorUtility.SetDirty(matchControls);
+        EditorUtility.SetDirty(sparkControls);
         EditorUtility.SetDirty(debugDisplay);
 
         CreateSpawns(root.transform);

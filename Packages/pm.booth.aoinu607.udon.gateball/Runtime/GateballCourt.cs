@@ -133,6 +133,24 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             LastStrokeImpulse = impulse;
         }
 
+        public void _BeginShot(int strikerBallId)
+        {
+            for (int i = 0; i < GateballGeometry.BallCount; i++)
+            {
+                _lastTouchTargetIds[i] = -1;
+                _touchCounts[i] = 0;
+                _gatePostCollisionCounts[i] = 0;
+                _boundaryCollisionCounts[i] = 0;
+                _goalPoleCollisionCounts[i] = 0;
+                _goalPoleHits[i] = false;
+                _invalidGatePassCounts[i] = 0;
+                _reverseGatePassCounts[i] = 0;
+            }
+
+            LastStrokeBallId = strikerBallId;
+            LastStoppedBallId = -1;
+        }
+
         public void _NotifyBallStopped(GateballBall ball)
         {
             if (ball != null)
@@ -298,6 +316,31 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 if (index >= 0 && index < positions.Length)
                 {
                     ball._SetPosition(positions[index]);
+                }
+            }
+        }
+
+        public void _ApplyAuthoritativeGameplayState(
+            int[] gateProgress,
+            bool[] outStates,
+            bool[] goalStates)
+        {
+            _EnsureStateArrays();
+            for (int i = 0; i < GateballGeometry.BallCount; i++)
+            {
+                if (gateProgress != null && i < gateProgress.Length)
+                {
+                    _gateProgress[i] = Mathf.Clamp(gateProgress[i], 0, 4);
+                }
+
+                if (outStates != null && i < outStates.Length)
+                {
+                    _outStates[i] = outStates[i];
+                }
+
+                if (goalStates != null && i < goalStates.Length)
+                {
+                    _goalPoleHits[i] = goalStates[i];
                 }
             }
         }
