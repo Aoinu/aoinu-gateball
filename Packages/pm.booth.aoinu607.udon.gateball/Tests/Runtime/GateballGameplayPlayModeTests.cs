@@ -105,6 +105,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             gameplay.SparkBallLocked = true;
             yield return null;
 
+            Vector3 strikerPlacement = striker.Body.position;
             networkState._RequestStroke(1, Vector3.forward, GateballGeometry.NormalStrokeImpulse);
             yield return new WaitForFixedUpdate();
             yield return new WaitForFixedUpdate();
@@ -112,7 +113,56 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             Assert.AreEqual(2, networkState.StrokeTargetBallId);
             Assert.AreEqual(GateballGameplayRules.PhaseSimulating, gameplay.GameplayPhase);
             Assert.IsTrue(gameplay.SparkStroke);
+            Assert.AreEqual(Vector3.zero, striker.Body.velocity);
+            Assert.That(Vector3.Distance(striker.Body.position, strikerPlacement), Is.LessThan(0.0001f));
+            Assert.IsTrue(striker.Body.isKinematic);
+            Assert.That(networkState.StrokeTargetImpulse, Is.EqualTo(GateballGeometry.NormalStrokeImpulse * 0.75f).Within(0.0001f));
             Assert.Greater(target.Body.velocity.magnitude, 0.1f);
+        }
+
+        [UnityTest]
+        public IEnumerator SparkStrokeDoesNotResolveStrikerRules()
+        {
+            GateballCourt court = CreateCourt();
+            GateballBall striker = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
+            GateballBall target = CreateBall(court, 2, new Vector3(0.2f, GateballGeometry.BallRadius, 0f));
+            court.Balls = new[] { striker, target };
+            court.Gates = new GateballGate[0];
+
+            GameObject networkObject = CreateObject("NetworkState");
+            GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
+            GateballGameplayState gameplay = networkObject.AddComponent<GateballGameplayState>();
+            networkState.Court = court;
+            networkState.Gameplay = gameplay;
+            gameplay.Court = court;
+            gameplay.NetworkState = networkState;
+            gameplay.Mode = GateballGameplayRules.ModeMatch;
+            gameplay.GameplayPhase = GateballGameplayRules.PhaseWaitingForSparkStroke;
+            gameplay.CurrentBallId = 1;
+            gameplay.SparkTargetBallId = 2;
+            gameplay.SparkBallLocked = true;
+            gameplay.BallGateProgress[0] = 3;
+            gameplay.OnDeserialization();
+            yield return null;
+
+            networkState._RequestStroke(1, Vector3.forward, GateballGeometry.NormalStrokeImpulse);
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+
+            court._RegisterTouch(striker, target);
+            striker.Body.isKinematic = false;
+            court._RegisterBoundaryCollision(striker);
+            striker.Body.isKinematic = true;
+            court._RegisterGoalPoleContact(striker);
+            gameplay._ResolveAuthoritativeShot(1);
+
+            Assert.AreEqual(3, gameplay.BallGateProgress[0]);
+            Assert.IsFalse(gameplay.BallOutStates[0]);
+            Assert.IsFalse(gameplay.BallGoalStates[0]);
+            Assert.IsFalse(gameplay.DidTouch);
+            Assert.AreEqual(-1, gameplay.TouchedBallId);
+            Assert.AreEqual(1, gameplay.CurrentBallId);
+            Assert.AreEqual(GateballGameplayRules.PhaseWaitingForStroke, gameplay.GameplayPhase);
         }
 
         [UnityTest]

@@ -70,6 +70,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private float _pendingStrokeImpulse;
         private float _settledTime;
         private bool _observedMotion;
+        private bool _sparkStrikerLocked;
+        private bool _sparkStrikerWasKinematic;
+        private int _sparkStrikerBallId = -1;
 
         private void Start()
         {
@@ -449,6 +452,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             Court._CaptureBallPositions(FinalBallPositions);
             CopyPositions(FinalBallPositions, AuthoritativeBallPositions);
+            _ReleaseSparkStriker();
             if (Gameplay != null)
             {
                 Gameplay.SetProgramVariable("NetworkShotId", ShotId);
@@ -517,6 +521,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             _ApplyAuthoritativePositions();
+            _ReleaseSparkStriker();
             _activeLocalShotId = -1;
             _lateJoinShotId = -1;
             _pendingShotStart = false;
@@ -627,6 +632,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _lateJoinShotId = -1;
             _pendingShotStart = false;
             _pendingStrokeApply = false;
+            _ReleaseSparkStriker();
             _lastAppliedShotId = 0;
             _RequestSerializationIfOwner();
         }
@@ -648,6 +654,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _activeLocalShotId = -1;
             _pendingShotStart = false;
             _pendingStrokeApply = false;
+            _ReleaseSparkStriker();
             _RequestSerializationIfOwner();
         }
 
@@ -665,8 +672,18 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             _pendingStrokeApply = false;
-            strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
-            if (GateballGeometry.IsValidBallId(StrokeTargetBallId))
+            bool sparkStroke = GateballGeometry.IsValidBallId(StrokeTargetBallId)
+                && StrokeTargetBallId != StrokeBallId;
+            if (sparkStroke)
+            {
+                _LockSparkStriker(strokeBall);
+            }
+            else
+            {
+                strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
+            }
+
+            if (sparkStroke)
             {
                 GateballBall targetBall = Court._GetBall(StrokeTargetBallId);
                 if (targetBall != null)
@@ -682,6 +699,48 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 + " fixedDelta=" + Time.fixedDeltaTime.ToString()
                 + " velocity=" + strokeBall.Body.velocity.ToString()
                 + " kinematic=" + strokeBall.Body.isKinematic.ToString());
+        }
+
+        private void _LockSparkStriker(GateballBall strikerBall)
+        {
+            if (strikerBall == null || strikerBall.Body == null)
+            {
+                return;
+            }
+
+            if (!_sparkStrikerLocked || _sparkStrikerBallId != strikerBall.BallId)
+            {
+                _sparkStrikerWasKinematic = strikerBall.Body.isKinematic;
+                _sparkStrikerBallId = strikerBall.BallId;
+            }
+
+            strikerBall.Body.velocity = Vector3.zero;
+            strikerBall.Body.angularVelocity = Vector3.zero;
+            strikerBall.Body.isKinematic = true;
+            _sparkStrikerLocked = true;
+        }
+
+        private void _ReleaseSparkStriker()
+        {
+            if (!_sparkStrikerLocked || Court == null)
+            {
+                return;
+            }
+
+            GateballBall strikerBall = Court._GetBall(_sparkStrikerBallId);
+            if (strikerBall != null && strikerBall.Body != null)
+            {
+                strikerBall.Body.isKinematic = _sparkStrikerWasKinematic;
+                if (!strikerBall.Body.isKinematic)
+                {
+                    strikerBall.Body.velocity = Vector3.zero;
+                    strikerBall.Body.angularVelocity = Vector3.zero;
+                }
+            }
+
+            _sparkStrikerLocked = false;
+            _sparkStrikerWasKinematic = false;
+            _sparkStrikerBallId = -1;
         }
 
         private void _TryApplyPendingShotStart()

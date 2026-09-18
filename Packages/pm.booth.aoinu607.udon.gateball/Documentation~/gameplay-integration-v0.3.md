@@ -103,9 +103,11 @@ balls. The striker ball is fixed at the adjacent position until the Spark
 stroke.
 
 The Spark stroke reuses the normal `direction + impulse` representation. The
-ShotStart carries one additional target Ball impulse; all clients apply both
-impulses locally. After ShotEnd, the Spark stroke returns to
-`WaitingForStroke` for the same ball.
+ShotStart carries one additional target Ball impulse. The striker direction
+and impulse are retained as input, but the striker Rigidbody stays at its
+placement position and receives no physics impulse. Only the target receives
+the transfer impulse (`striker impulse * 0.75`). After ShotEnd, the Spark
+stroke returns to `WaitingForStroke` for the same ball.
 
 ## Out simplification
 
@@ -144,6 +146,43 @@ match timer, all foul rules, every compound Touch/Spark edge case, referee and
 ranking systems, persistence, replay, spectators, AI, multiple courts, and
 polished art/audio/VFX.
 
+## Final validation / fix round (2026-09-18)
+
+The Spark path was corrected in the existing ShotStart/ShotEnd path. Normal
+shots still apply the stroke to the striker. Spark shots lock the placed
+striker, apply only the transfer impulse to `StrokeTargetBallId`, and preserve
+the striker's pre-placement gameplay state during authoritative resolution.
+The PlayMode regression coverage checks target velocity, zero striker velocity,
+placement position, and no striker Gate/Out/Goal/Touch mutation.
+
+| Area | Status | Evidence / unresolved scope |
+| --- | --- | --- |
+| Spark semantics | PASS | PlayMode regression passed: target moves; striker remains fixed and kinematic; transfer impulse is 0.75x. |
+| Spark striker rule resolution | PASS | PlayMode regression passed: striker Gate progress, Out, Goal, Touch, and current-ball state remain unchanged. |
+| Two-client Build & Test environment | PASS | SDK World Builder ran with `VRCSettings.NumClients = 2`; two VRChat processes loaded `VRCDefaultWorldScene`, and each log observed the other player. |
+| VRChat client input retry | BLOCKED | SDK launch and a second launch with `-screen-fullscreen 0 -screen-width 1280 -screen-height 720` both produced `MainWindowHandle=0`; no usable input surface was available. Logs confirmed world entry and local/remote PlayerAPI initialization but no gameplay event. |
+| Match start / Ball 1 assignment | BLOCKED | No gameplay control could be issued after the client-input retry. |
+| Ball 1 ShotEnd / turn 1 -> 2 | BLOCKED | Requires interactive two-client input and per-client gameplay logs. |
+| Ownership transfer in both directions | BLOCKED | Requires interactive two-client turns; not inferred from process startup. |
+| Gate + score + extra stroke | BLOCKED | Requires fixture or real input in both clients. |
+| Touch -> Spark state and Spark stroke | BLOCKED | Requires interactive two-client input; deterministic PlayMode coverage is PASS separately. |
+| Out and deterministic return | BLOCKED | Requires interactive two-client input and remote state observation. |
+| Late Join | BLOCKED | No usable third/rejoining interactive client was available. |
+| Current Player disconnect recovery | BLOCKED | Requires disconnecting an interactive client and observing reassignment. |
+| Shot Authority disconnect rollback | BLOCKED | Requires disconnecting the active interactive client during simulation. |
+| Owner-only resolution / state convergence | BLOCKED | Requires gameplay-triggered owner and remote client logs. |
+| UdonSharp compile | PASS | Unity compile status: succeeded, 0 errors. |
+| EditMode | PASS | Unity Test Runner: 29/29 passed. |
+| PlayMode | PASS | Unity Test Runner: 14/14 passed. |
+| Repository validation / CI | BLOCKED | Local static checks pass. The latest remote Validate Repository run is PASS for baseline commit `c3376b6` ([run 35315432014](https://github.com/Aoinu/aoinu-gateball/actions/runs/35315432014)), but this fix round has not yet run in GitHub Actions. |
+
+**BLOCKED / MODIFY:** the Spark implementation and automated regressions pass,
+but v0.3 cannot be formally closed because interactive two-client gameplay,
+late join, disconnect recovery, ownership transfer, and repository CI remain
+unverified. The next validation run needs a Build & Test client environment
+with visible/input-capable client windows (and a third or rejoining client for
+late join).
+
 ## Automated validation
 
 The focused Unity test assemblies cover the v0.1/v0.2 physics contracts plus
@@ -151,12 +190,12 @@ the v0.3 assignment, turn, Goal skip, Gate/score, extra stroke, Touch/Spark,
 Out, GameOver, disconnect reassignment, snapshot copy, Gate resolution,
 Spark placement, and late-join state application helpers.
 
-The final validation record for this checkout is maintained below:
+The focused automated validation record for this checkout is:
 
 ```text
 UdonSharp compile: succeeded, 0 errors (Unity 2022.3.22f1, 2026-09-18)
 EditMode tests: passed, 29/29
-PlayMode tests: passed, 13/13
-VRChat SDK World Builder Build & Test: Task RanToCompletion, fault none; Build-only and Run-with-result API returned True and produced a local .vrcw URL. A second VRChat client was not available in this checkout, so two-client interaction was not claimed.
-Repository validation: package metadata passed, credential-signature scan passed, and git diff --check passed for text changes. Full git status/diff remains blocked by the installed git-vrc filter failing to create its Windows signal pipe.
+PlayMode tests: passed, 14/14
+VRChat SDK World Builder Build & Test: task completed successfully with `NumClients=2`; two VRChat processes loaded the local `VRCDefaultWorldScene`. A retry with explicit windowed arguments also exposed no top-level window/input surface, so interactive gameplay was not claimed.
+Repository validation: package metadata passed, credential-signature scan passed with no matches, and `git diff --check` passed for text changes. The latest remote Validate Repository run for baseline `c3376b6` passed; this fix round has not yet run remotely.
 ```

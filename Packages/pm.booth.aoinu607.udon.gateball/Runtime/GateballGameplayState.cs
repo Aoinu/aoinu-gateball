@@ -64,7 +64,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (_recoveryPending)
             {
-                SendCustomEventDelayedSeconds(nameof(_RecoverAfterDisconnect), 0.05f);
+                _RecoverAfterDisconnect();
                 return;
             }
 
@@ -73,7 +73,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
-            if (player == null || !player.IsValid())
+            if (player == null)
             {
                 return;
             }
@@ -89,7 +89,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             _departedPlayerId = player.playerId;
             _recoveryPending = true;
-            SendCustomEventDelayedSeconds(nameof(_RecoverAfterDisconnect), 0.20f);
+            if (_IsLocalOwner())
+            {
+                _RecoverAfterDisconnect();
+            }
         }
 
         public void _StartPractice()
@@ -200,8 +203,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             GameplayPhase = GateballGameplayRules.PhaseSimulating;
             SparkStroke = startingSparkStroke;
-            DidTouch = false;
-            TouchedBallId = -1;
+            if (!startingSparkStroke)
+            {
+                DidTouch = false;
+                TouchedBallId = -1;
+            }
             GameplayRevision = Mathf.Max(GameplayRevision, shotId);
             _RequestSerializationIfOwner();
         }
@@ -242,16 +248,28 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
+            bool sparkStroke = SparkStroke
+                && NetworkState != null
+                && GateballGeometry.IsValidBallId(NetworkState.StrokeTargetBallId)
+                && NetworkState.StrokeTargetBallId != resolvedBallId;
             int previousProgress = BallGateProgress[ballIndex];
-            int detectedProgress = Mathf.Clamp(Court._GetGateProgress(CurrentBallId), 0, 3);
+            int detectedProgress = sparkStroke
+                ? previousProgress
+                : Mathf.Clamp(Court._GetGateProgress(resolvedBallId), 0, 3);
             int nextProgress = Mathf.Max(previousProgress, detectedProgress);
-            bool didTouch = GateballGameplayRules.IsTouchEstablished(
-                resolvedBallId,
-                Court._GetTouchTargetId(resolvedBallId),
-                Court._GetTouchCount(resolvedBallId));
-            int touchedBallId = didTouch ? Court._GetTouchTargetId(resolvedBallId) : -1;
-            bool outState = Court._IsOut(resolvedBallId);
-            bool goal = nextProgress >= 3 && Court._HasGoalPoleHit(resolvedBallId) && !outState;
+            bool didTouch = sparkStroke
+                ? DidTouch
+                : GateballGameplayRules.IsTouchEstablished(
+                    resolvedBallId,
+                    Court._GetTouchTargetId(resolvedBallId),
+                    Court._GetTouchCount(resolvedBallId));
+            int touchedBallId = sparkStroke
+                ? TouchedBallId
+                : (didTouch ? Court._GetTouchTargetId(resolvedBallId) : -1);
+            bool outState = sparkStroke ? BallOutStates[ballIndex] : Court._IsOut(resolvedBallId);
+            bool goal = sparkStroke
+                ? BallGoalStates[ballIndex]
+                : nextProgress >= 3 && Court._HasGoalPoleHit(resolvedBallId) && !outState;
             if (goal)
             {
                 nextProgress = 4;
@@ -269,6 +287,57 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (goal)
             {
                 BallGoalStates[ballIndex] = true;
+            }
+
+            if (sparkStroke)
+            {
+                int targetBallId = NetworkState.StrokeTargetBallId;
+                int targetIndex = GateballGeometry.BallIdToIndex(targetBallId);
+                if (targetIndex >= 0)
+                {
+                    int targetPreviousProgress = BallGateProgress[targetIndex];
+                    int targetDetectedProgress = Mathf.Clamp(Court._GetGateProgress(targetBallId), 0, 3);
+                    int targetNextProgress = Mathf.Max(targetPreviousProgress, targetDetectedProgress);
+                    bool targetOutState = Court._IsOut(targetBallId);
+                    bool targetGoal = targetNextProgress >= 3
+                        && Court._HasGoalPoleHit(targetBallId)
+                        && !targetOutState;
+                    if (targetGoal)
+                    {
+                        targetNextProgress = 4;
+                    }
+
+                    BallGateProgress[targetIndex] = targetNextProgress;
+                    BallOutStates[targetIndex] = targetOutState;
+                    if (targetOutState)
+                    {
+                        LastOutBallId = targetBallId;
+                    }
+
+                    if (targetGoal)
+                    {
+                        BallGoalStates[targetIndex] = true;
+                    }
+
+                    if (Mode == GateballGameplayRules.ModeMatch)
+                    {
+                        int targetScoreDelta = GateballGameplayRules.CalculateScoreDelta(
+                            targetPreviousProgress,
+                            targetNextProgress);
+                        BallScores[targetIndex] += targetScoreDelta;
+                        if (targetScoreDelta > 0)
+                        {
+                            if (GateballGameplayRules.TeamForBall(targetBallId) == 0)
+                            {
+                                RedScore += targetScoreDelta;
+                            }
+                            else
+                            {
+                                WhiteScore += targetScoreDelta;
+                            }
+                        }
+                    }
+                }
             }
 
             if (Mode == GateballGameplayRules.ModeMatch)
@@ -289,7 +358,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             _ApplyStateToCourt();
-            bool sparkStroke = SparkStroke;
             SparkStroke = false;
 
             if (Mode == GateballGameplayRules.ModePractice)
