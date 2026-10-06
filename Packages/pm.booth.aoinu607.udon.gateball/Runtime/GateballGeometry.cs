@@ -156,5 +156,21 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         {
             return Mathf.Clamp(malletSpeed * strikeScale, minimumImpulse, maximumImpulse);
         }
+
+        public static Vector3 CalculateRollingAngularVelocity(
+            Vector3 linearVelocity,
+            Vector3 groundNormal,
+            float ballRadius,
+            float rollingFactor)
+        {
+            if (!(groundNormal.sqrMagnitude > 0.000001f) || !(ballRadius > 0.0001f))
+            {
+                return Vector3.zero;
+            }
+
+            Vector3 normal = groundNormal.normalized;
+            Vector3 horizontalVelocity = Vector3.ProjectOnPlane(linearVelocity, normal);
+            return Vector3.Cross(normal, horizontalVelocity) / ballRadius * rollingFactor;
+        }
     }
 }

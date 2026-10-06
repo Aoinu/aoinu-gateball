@@ -207,7 +207,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         }
 
         [UnityTest]
-        public IEnumerator MalletSweepUsesHeadShapeAndRoutesStroke()
+        public IEnumerator MalletContactWithoutPickupAndAimLockDoesNotStroke()
         {
             GateballCourt court = CreateCourt();
             GateballBall ball = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
@@ -226,19 +226,18 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             mallet.StrokeRouter = router;
             mallet.Head = headObject.transform;
             mallet.HeadCollider = headCollider;
-            mallet.BallLayer = ball.gameObject.layer;
             yield return null;
             yield return new WaitForFixedUpdate();
 
             headObject.transform.localPosition = new Vector3(0.4f, GateballGeometry.BallRadius, 0f);
             yield return new WaitForFixedUpdate();
 
-            Assert.AreEqual(1, court.LastStrokeBallId);
-            Assert.Greater(ball.Body.velocity.magnitude, 0.05f);
+            Assert.AreEqual(-1, court.LastStrokeBallId);
+            Assert.AreEqual(Vector3.zero, ball.Body.velocity);
         }
 
         [UnityTest]
-        public IEnumerator MalletRoutesPhysicsOnlyStrokeThroughNetworkState()
+        public IEnumerator UnarmedMalletContactDoesNotStartNetworkShot()
         {
             GateballCourt court = CreateCourt();
             GateballBall ball = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
@@ -262,7 +261,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             mallet.StrokeRouter = router;
             mallet.Head = headObject.transform;
             mallet.HeadCollider = headCollider;
-            mallet.BallLayer = ball.gameObject.layer;
             yield return null;
             yield return new WaitForFixedUpdate();
 
@@ -270,11 +268,105 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             yield return new WaitForFixedUpdate();
             yield return new WaitForFixedUpdate();
 
-            Assert.IsNull(mallet.Gameplay);
-            Assert.AreEqual(1, networkState.ShotId);
-            Assert.AreEqual(GateballNetworkState.PhaseSimulating, networkState.Phase);
-            Assert.AreEqual(1, court.LastStrokeBallId);
-            Assert.Greater(ball.Body.velocity.magnitude, 0.05f);
+            Assert.AreEqual(0, networkState.ShotId);
+            Assert.AreEqual(GateballNetworkState.PhaseWaiting, networkState.Phase);
+            Assert.AreEqual(-1, court.LastStrokeBallId);
+            Assert.AreEqual(Vector3.zero, ball.Body.velocity);
+        }
+
+        [UnityTest]
+        public IEnumerator GripTransitionsPreservePoseAndPromoteTheRemainingHand()
+        {
+            GameObject malletObject = new GameObject("MalletController");
+            Register(malletObject);
+            GameObject rigObject = new GameObject("MalletRig");
+            Register(rigObject);
+            rigObject.transform.SetPositionAndRotation(new Vector3(1f, 1f, -2f), Quaternion.identity);
+
+            GameObject gripAObject = new GameObject("GripA");
+            Register(gripAObject);
+            gripAObject.transform.position = rigObject.transform.position + Vector3.up * 0.4f;
+            GameObject gripBObject = new GameObject("GripB");
+            Register(gripBObject);
+            gripBObject.transform.position = rigObject.transform.position - Vector3.up * 0.3f;
+
+            GateballMallet mallet = malletObject.AddComponent<GateballMallet>();
+            mallet.MalletRig = rigObject.transform;
+            mallet.GripA = gripAObject.transform;
+            mallet.GripB = gripBObject.transform;
+            yield return null;
+
+            mallet._OnGripPicked(0);
+            yield return null;
+            gripAObject.transform.position += Vector3.right * 0.25f;
+            gripAObject.transform.rotation = Quaternion.Euler(0f, 30f, 0f);
+            yield return null;
+
+            Vector3 beforeSecondPickupPosition = rigObject.transform.position;
+            Quaternion beforeSecondPickupRotation = rigObject.transform.rotation;
+            gripBObject.transform.position = gripAObject.transform.position
+                + beforeSecondPickupRotation * Vector3.down * 0.7f;
+            mallet._OnGripPicked(1);
+            yield return null;
+
+            Assert.Less(Vector3.Distance(beforeSecondPickupPosition, rigObject.transform.position), 0.0001f);
+            Assert.Less(Quaternion.Angle(beforeSecondPickupRotation, rigObject.transform.rotation), 0.001f);
+
+            Vector3 currentShaftDirection = new Vector3(1f, -1f, 0f).normalized;
+            gripAObject.transform.position += Vector3.forward * 0.3f;
+            gripBObject.transform.position = gripAObject.transform.position + currentShaftDirection * 0.7f;
+            yield return null;
+
+            Assert.Less(Vector3.Angle(rigObject.transform.rotation * Vector3.down, currentShaftDirection), 0.001f);
+            Vector3 beforePrimaryReleasePosition = rigObject.transform.position;
+            Quaternion beforePrimaryReleaseRotation = rigObject.transform.rotation;
+            mallet._OnGripDropped(0);
+            yield return null;
+
+            Assert.Less(Vector3.Distance(beforePrimaryReleasePosition, rigObject.transform.position), 0.0001f);
+            Assert.Less(Quaternion.Angle(beforePrimaryReleaseRotation, rigObject.transform.rotation), 0.001f);
+
+            gripBObject.transform.position += Vector3.right * 0.2f;
+            yield return null;
+            Assert.Greater(Vector3.Distance(beforePrimaryReleasePosition, rigObject.transform.position), 0.01f);
+        }
+
+        [UnityTest]
+        public IEnumerator ShotStartAppliesSynchronizedLinearAndAngularVelocity()
+        {
+            GateballCourt court = CreateCourt();
+            GateballBall ball = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
+            ball.Body.angularDrag = 0f;
+            court.Balls = new[] { ball };
+
+            GameObject networkObject = new GameObject("NetworkState");
+            Register(networkObject);
+            GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
+            networkState.Court = court;
+            yield return null;
+
+            Vector3 linearVelocity = new Vector3(0.8f, 0f, 0.2f);
+            Vector3 angularVelocity = new Vector3(0f, 1.5f, -2f);
+            Assert.IsTrue(networkState._RequestShotWithVelocities(1, linearVelocity, angularVelocity));
+            yield return new WaitForFixedUpdate();
+
+            Assert.AreEqual(linearVelocity, networkState.InitialLinearVelocity);
+            Assert.AreEqual(angularVelocity, networkState.InitialAngularVelocity);
+            Assert.AreEqual(linearVelocity, ball.Body.velocity);
+            Assert.AreEqual(angularVelocity, ball.Body.angularVelocity);
+        }
+
+        [Test]
+        public void ShotStartRejectsNonFiniteVelocity()
+        {
+            GateballNetworkState networkState = new GameObject("NetworkState")
+                .AddComponent<GateballNetworkState>();
+
+            Assert.IsFalse(networkState._RequestShotWithVelocities(
+                1,
+                new Vector3(float.NaN, 0f, 1f),
+                Vector3.zero));
+            UnityEngine.Object.DestroyImmediate(networkState.gameObject);
         }
 
         private GateballCourt CreateCourt()
