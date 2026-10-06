@@ -212,6 +212,36 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             return CurrentControllerPlayerId == Networking.LocalPlayer.playerId;
         }
 
+        public bool _RequestStroke(int ballId, Vector3 direction, float impulse)
+        {
+            if (!_CanRequestStroke(ballId) || NetworkState == null)
+            {
+                return false;
+            }
+
+            bool useSecondaryImpulse = GameplayPhase == GateballGameplayRules.PhaseWaitingForSparkStroke
+                && SparkBallLocked
+                && GateballGeometry.IsValidBallId(SparkTargetBallId)
+                && SparkTargetBallId != ballId;
+            if (useSecondaryImpulse)
+            {
+                NetworkState._RequestStrokeWithInitialConditions(
+                    ballId,
+                    direction,
+                    impulse,
+                    ballId,
+                    SparkTargetBallId,
+                    direction,
+                    impulse * 0.75f);
+            }
+            else
+            {
+                NetworkState._RequestStroke(ballId, direction, impulse);
+            }
+
+            return true;
+        }
+
         public void _OnShotStarted()
         {
             if (!_IsLocalOwner())
