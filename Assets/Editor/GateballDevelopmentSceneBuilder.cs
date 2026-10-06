@@ -140,7 +140,6 @@ public static class GateballDevelopmentSceneBuilder
         GateballGameplayState gameplay = networkState.gameObject.AddUdonSharpComponent<GateballGameplayState>();
         networkState.Court = court;
         networkState.Telemetry = telemetry;
-        networkState.Gameplay = gameplay;
         gameplay.Court = court;
         gameplay.NetworkState = networkState;
         court.Telemetry = telemetry;

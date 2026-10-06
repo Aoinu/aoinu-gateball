@@ -83,7 +83,30 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
         }
 
         [UnityTest]
-        public IEnumerator SparkStrokeUsesShotStartAndTransfersImpulseToTarget()
+        public IEnumerator PhysicsStrokeDoesNotDependOnGameplayPhase()
+        {
+            GateballCourt court = CreateCourt();
+            GateballBall ball = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
+            court.Balls = new[] { ball };
+            court.Gates = new GateballGate[0];
+
+            GameObject networkObject = CreateObject("NetworkState");
+            GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
+            GateballGameplayState gameplay = networkObject.AddComponent<GateballGameplayState>();
+            networkState.Court = court;
+            gameplay.Court = court;
+            gameplay.NetworkState = networkState;
+            gameplay.GameplayPhase = GateballGameplayRules.PhaseGameOver;
+            yield return null;
+
+            networkState._RequestStroke(1, Vector3.forward, GateballGeometry.NormalStrokeImpulse);
+
+            Assert.AreEqual(1, networkState.ShotId);
+            Assert.AreEqual(GateballNetworkState.PhaseSimulating, networkState.Phase);
+        }
+
+        [UnityTest]
+        public IEnumerator GameplayObservesPhysicsShotPhase()
         {
             GateballCourt court = CreateCourt();
             GateballBall striker = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
@@ -95,7 +118,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
             GateballGameplayState gameplay = networkObject.AddComponent<GateballGameplayState>();
             networkState.Court = court;
-            networkState.Gameplay = gameplay;
             gameplay.Court = court;
             gameplay.NetworkState = networkState;
             gameplay.Mode = GateballGameplayRules.ModeMatch;
@@ -105,19 +127,13 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             gameplay.SparkBallLocked = true;
             yield return null;
 
-            Vector3 strikerPlacement = striker.Body.position;
             networkState._RequestStroke(1, Vector3.forward, GateballGeometry.NormalStrokeImpulse);
-            yield return new WaitForFixedUpdate();
-            yield return new WaitForFixedUpdate();
+            yield return null;
 
-            Assert.AreEqual(2, networkState.StrokeTargetBallId);
             Assert.AreEqual(GateballGameplayRules.PhaseSimulating, gameplay.GameplayPhase);
             Assert.IsTrue(gameplay.SparkStroke);
-            Assert.AreEqual(Vector3.zero, striker.Body.velocity);
-            Assert.That(Vector3.Distance(striker.Body.position, strikerPlacement), Is.LessThan(0.0001f));
-            Assert.IsTrue(striker.Body.isKinematic);
-            Assert.That(networkState.StrokeTargetImpulse, Is.EqualTo(GateballGeometry.NormalStrokeImpulse * 0.75f).Within(0.0001f));
-            Assert.Greater(target.Body.velocity.magnitude, 0.1f);
+            Assert.AreEqual(1, networkState.StrokeBallId);
+            Assert.AreEqual(GateballGeometry.NormalStrokeImpulse, networkState.StrokeImpulse);
         }
 
         [UnityTest]
@@ -133,7 +149,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
             GateballGameplayState gameplay = networkObject.AddComponent<GateballGameplayState>();
             networkState.Court = court;
-            networkState.Gameplay = gameplay;
             gameplay.Court = court;
             gameplay.NetworkState = networkState;
             gameplay.Mode = GateballGameplayRules.ModeMatch;
