@@ -237,6 +237,46 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
             Assert.Greater(ball.Body.velocity.magnitude, 0.05f);
         }
 
+        [UnityTest]
+        public IEnumerator MalletRoutesPhysicsOnlyStrokeThroughNetworkState()
+        {
+            GateballCourt court = CreateCourt();
+            GateballBall ball = CreateBall(court, 1, new Vector3(0f, GateballGeometry.BallRadius, 0f));
+            court.Balls = new[] { ball };
+            GateballStrokeRouter router = CreateRouter(court);
+            GameObject networkObject = new GameObject("NetworkState");
+            Register(networkObject);
+            GateballNetworkState networkState = networkObject.AddComponent<GateballNetworkState>();
+            networkState.Court = court;
+            router.NetworkState = networkState;
+
+            GameObject malletObject = new GameObject("Mallet");
+            Register(malletObject);
+            GameObject headObject = CreatePrimitive("Head", PrimitiveType.Cube);
+            headObject.transform.SetParent(malletObject.transform, false);
+            headObject.transform.localPosition = new Vector3(-0.4f, GateballGeometry.BallRadius, 0f);
+            headObject.transform.localScale = new Vector3(0.65f, 0.18f, 0.22f);
+            BoxCollider headCollider = headObject.GetComponent<BoxCollider>();
+            headCollider.isTrigger = true;
+            GateballMallet mallet = malletObject.AddComponent<GateballMallet>();
+            mallet.StrokeRouter = router;
+            mallet.Head = headObject.transform;
+            mallet.HeadCollider = headCollider;
+            mallet.BallLayer = ball.gameObject.layer;
+            yield return null;
+            yield return new WaitForFixedUpdate();
+
+            headObject.transform.localPosition = new Vector3(0.4f, GateballGeometry.BallRadius, 0f);
+            yield return new WaitForFixedUpdate();
+            yield return new WaitForFixedUpdate();
+
+            Assert.IsNull(mallet.Gameplay);
+            Assert.AreEqual(1, networkState.ShotId);
+            Assert.AreEqual(GateballNetworkState.PhaseSimulating, networkState.Phase);
+            Assert.AreEqual(1, court.LastStrokeBallId);
+            Assert.Greater(ball.Body.velocity.magnitude, 0.05f);
+        }
+
         private GateballCourt CreateCourt()
         {
             GameObject courtObject = new GameObject("Court");

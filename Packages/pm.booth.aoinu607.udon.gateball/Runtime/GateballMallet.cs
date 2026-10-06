@@ -176,7 +176,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
             else if (StrokeRouter != null)
             {
-                StrokeRouter._ApplyStrokeToBall(ball, direction, impulse);
+                StrokeRouter._ApplyStrokeById(ball.BallId, direction, impulse);
                 strokeRequested = true;
             }
 
