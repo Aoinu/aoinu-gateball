@@ -6,6 +6,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class GateballMallet : UdonSharpBehaviour
     {
+        public GateballGameplayState Gameplay;
         public GateballStrokeRouter StrokeRouter;
         public Transform Head;
         public Collider HeadCollider;
@@ -168,9 +169,19 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 MinimumImpulse,
                 MaximumImpulse);
 
-            if (StrokeRouter != null)
+            bool strokeRequested = false;
+            if (Gameplay != null)
             {
-                StrokeRouter._ApplyStrokeToBall(ball, direction, impulse);
+                strokeRequested = Gameplay._RequestStroke(ball.BallId, direction, impulse);
+            }
+            else if (StrokeRouter != null)
+            {
+                StrokeRouter._ApplyStrokeById(ball.BallId, direction, impulse);
+                strokeRequested = true;
+            }
+
+            if (strokeRequested)
+            {
                 _lastHitBallId = ball.BallId;
                 _lastHitTime = Time.fixedTime;
             }

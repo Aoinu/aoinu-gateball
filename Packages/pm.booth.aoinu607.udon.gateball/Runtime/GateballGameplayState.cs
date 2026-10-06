@@ -39,6 +39,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private bool _initialized;
         private bool _recoveryPending;
         private int _departedPlayerId = -1;
+        private int _resolvedNetworkShotId = -1;
 
         private void Start()
         {
@@ -46,6 +47,32 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _EnsureArrays();
             _ApplyStateToCourt();
             _initialized = true;
+        }
+
+        private void Update()
+        {
+            if (!_initialized || NetworkState == null)
+            {
+                return;
+            }
+
+            int shotId = NetworkState.ShotId;
+            if (shotId > 0
+                && shotId != NetworkShotId
+                && NetworkState.Phase != GateballNetworkState.PhaseWaiting)
+            {
+                NetworkShotId = shotId;
+                _OnShotStarted();
+            }
+
+            if (shotId > 0
+                && shotId == NetworkShotId
+                && shotId != _resolvedNetworkShotId
+                && NetworkState.Phase == GateballNetworkState.PhaseSettled)
+            {
+                _resolvedNetworkShotId = shotId;
+                _ResolveAuthoritativeShot(shotId);
+            }
         }
 
         public override void OnDeserialization()
@@ -185,6 +212,36 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             return CurrentControllerPlayerId == Networking.LocalPlayer.playerId;
         }
 
+        public bool _RequestStroke(int ballId, Vector3 direction, float impulse)
+        {
+            if (!_CanRequestStroke(ballId) || NetworkState == null)
+            {
+                return false;
+            }
+
+            bool useSecondaryImpulse = GameplayPhase == GateballGameplayRules.PhaseWaitingForSparkStroke
+                && SparkBallLocked
+                && GateballGeometry.IsValidBallId(SparkTargetBallId)
+                && SparkTargetBallId != ballId;
+            if (useSecondaryImpulse)
+            {
+                NetworkState._RequestStrokeWithInitialConditions(
+                    ballId,
+                    direction,
+                    impulse,
+                    ballId,
+                    SparkTargetBallId,
+                    direction,
+                    impulse * 0.75f);
+            }
+            else
+            {
+                NetworkState._RequestStroke(ballId, direction, impulse);
+            }
+
+            return true;
+        }
+
         public void _OnShotStarted()
         {
             if (!_IsLocalOwner())
@@ -210,11 +267,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
             GameplayRevision = Mathf.Max(GameplayRevision, shotId);
             _RequestSerializationIfOwner();
-        }
-
-        public float _GetSparkTransferImpulse(float strikerImpulse)
-        {
-            return Mathf.Max(0f, strikerImpulse * 0.75f);
         }
 
         public bool _IsSparkStroke()
@@ -249,9 +301,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
 
             bool sparkStroke = SparkStroke
-                && NetworkState != null
-                && GateballGeometry.IsValidBallId(NetworkState.StrokeTargetBallId)
-                && NetworkState.StrokeTargetBallId != resolvedBallId;
+                && GateballGeometry.IsValidBallId(SparkTargetBallId)
+                && SparkTargetBallId != resolvedBallId;
             int previousProgress = BallGateProgress[ballIndex];
             int detectedProgress = sparkStroke
                 ? previousProgress
@@ -291,7 +342,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (sparkStroke)
             {
-                int targetBallId = NetworkState.StrokeTargetBallId;
+                int targetBallId = SparkTargetBallId;
                 int targetIndex = GateballGeometry.BallIdToIndex(targetBallId);
                 if (targetIndex >= 0)
                 {
@@ -411,11 +462,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _RequestSerializationIfOwner();
         }
 
-        public void _ResolveAuthoritativeShotFromNetwork()
-        {
-            _ResolveAuthoritativeShot(NetworkShotId);
-        }
-
         public void _SelectSparkTarget(int ballId)
         {
             if (!_IsLocalOwner() || GameplayPhase != GateballGameplayRules.PhaseSparkPlacement)
@@ -533,6 +579,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private void _BeginSession(int mode, int[] playerIds, int playerCount)
         {
+            _resolvedNetworkShotId = -1;
+            NetworkShotId = 0;
             _EnsureArrays();
             Mode = mode;
             GameplayPhase = GateballGameplayRules.PhaseWaitingForStroke;
@@ -568,7 +616,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (NetworkState != null)
             {
-                NetworkState._ResetForGameplay();
+                NetworkState._ResetPhysics();
             }
             else if (Court != null)
             {

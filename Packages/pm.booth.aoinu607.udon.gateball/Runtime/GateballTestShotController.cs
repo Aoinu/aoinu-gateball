@@ -379,6 +379,12 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private void _Stroke(int ballId, Vector3 direction, float impulse)
         {
+            if (Gameplay != null)
+            {
+                Gameplay._RequestStroke(ballId, direction, impulse);
+                return;
+            }
+
             if (StrokeRouter != null)
             {
                 StrokeRouter._ApplyStrokeById(ballId, direction, impulse);

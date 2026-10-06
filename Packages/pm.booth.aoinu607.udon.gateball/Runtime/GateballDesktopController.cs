@@ -8,6 +8,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
     [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class GateballDesktopController : UdonSharpBehaviour
     {
+        public GateballGameplayState Gameplay;
         public GateballStrokeRouter StrokeRouter;
         public int SelectedBallId = 1;
         public float AimYawDegrees;
@@ -96,13 +97,20 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private void _Stroke(float impulse)
         {
-            if (StrokeRouter == null)
+            if (StrokeRouter == null && Gameplay == null)
             {
                 return;
             }
 
             Vector3 direction = Quaternion.AngleAxis(AimYawDegrees, Vector3.up) * Vector3.forward;
-            StrokeRouter._ApplyStrokeById(SelectedBallId, direction, impulse);
+            if (Gameplay != null)
+            {
+                Gameplay._RequestStroke(SelectedBallId, direction, impulse);
+            }
+            else
+            {
+                StrokeRouter._ApplyStrokeById(SelectedBallId, direction, impulse);
+            }
         }
     }
 }

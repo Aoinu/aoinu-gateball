@@ -140,7 +140,6 @@ public static class GateballDevelopmentSceneBuilder
         GateballGameplayState gameplay = networkState.gameObject.AddUdonSharpComponent<GateballGameplayState>();
         networkState.Court = court;
         networkState.Telemetry = telemetry;
-        networkState.Gameplay = gameplay;
         gameplay.Court = court;
         gameplay.NetworkState = networkState;
         court.Telemetry = telemetry;
@@ -224,6 +223,7 @@ public static class GateballDevelopmentSceneBuilder
         SphereCollider proxyCollider = proxyObject.AddComponent<SphereCollider>();
         proxyCollider.isTrigger = true;
         GateballMallet mallet = malletObject.AddUdonSharpComponent<GateballMallet>();
+        mallet.Gameplay = gameplay;
         mallet.StrokeRouter = router;
         mallet.Head = headObject.transform;
         mallet.HeadCollider = headObject.GetComponent<Collider>();
@@ -236,6 +236,7 @@ public static class GateballDevelopmentSceneBuilder
 
         GameObject desktopObject = CreatePrimitive("DesktopControls", PrimitiveType.Cube, root.transform, new Vector3(-4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballDesktopController desktop = desktopObject.AddUdonSharpComponent<GateballDesktopController>();
+        desktop.Gameplay = gameplay;
         desktop.StrokeRouter = router;
         desktop.SelectedBallId = 1;
         desktop.Power = GateballGeometry.NormalStrokeImpulse;
