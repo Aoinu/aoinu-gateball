@@ -4,6 +4,66 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 {
     public static class GateballMalletRules
     {
+        public static bool CanAcquireMalletAuthority(int currentHolderPlayerId, int requestingPlayerId)
+        {
+            return requestingPlayerId >= 0
+                && (currentHolderPlayerId < 0 || currentHolderPlayerId == requestingPlayerId);
+        }
+
+        public static bool IsValidGripMode(int primaryGripIndex, int secondaryGripIndex)
+        {
+            bool hasValidPrimary = primaryGripIndex == 0 || primaryGripIndex == 1;
+            bool hasValidSecondary = secondaryGripIndex == -1
+                || secondaryGripIndex == 0
+                || secondaryGripIndex == 1;
+            return hasValidPrimary && hasValidSecondary && secondaryGripIndex != primaryGripIndex;
+        }
+
+        public static Vector3 CalculateStrikeFaceHalfExtents(
+            Vector3 colliderSize,
+            Vector3 colliderScale,
+            float faceDepth)
+        {
+            return new Vector3(
+                Mathf.Abs(colliderSize.z * colliderScale.z) * 0.5f,
+                Mathf.Abs(colliderSize.y * colliderScale.y) * 0.5f,
+                Mathf.Max(0.001f, faceDepth * 0.5f));
+        }
+
+        public static float CalculatePoseRollDegrees(
+            Quaternion neutralMalletRotation,
+            Vector3 neutralShaftDirection,
+            Quaternion currentMalletRotation,
+            Vector3 currentShaftDirection,
+            Vector3 localRollReference)
+        {
+            if (!(neutralShaftDirection.sqrMagnitude > 0.000001f)
+                || !(currentShaftDirection.sqrMagnitude > 0.000001f)
+                || !(localRollReference.sqrMagnitude > 0.000001f))
+            {
+                return 0f;
+            }
+
+            Vector3 currentAxis = currentShaftDirection.normalized;
+            Quaternion shaftRotation = Quaternion.FromToRotation(
+                neutralShaftDirection.normalized,
+                currentAxis);
+            Quaternion alignedRotation = shaftRotation * neutralMalletRotation;
+            Vector3 alignedReference = Vector3.ProjectOnPlane(
+                alignedRotation * localRollReference,
+                currentAxis);
+            Vector3 currentReference = Vector3.ProjectOnPlane(
+                currentMalletRotation * localRollReference,
+                currentAxis);
+            if (!(alignedReference.sqrMagnitude > 0.000001f)
+                || !(currentReference.sqrMagnitude > 0.000001f))
+            {
+                return 0f;
+            }
+
+            return Vector3.SignedAngle(alignedReference, currentReference, currentAxis);
+        }
+
         public static Vector3 EstimateWindowVelocity(
             Vector3[] positions,
             float[] times,

@@ -200,11 +200,6 @@ public static class GateballDevelopmentSceneBuilder
         router.NetworkState = networkState;
         router.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
-        GameObject malletObject = new GameObject("MalletController");
-        malletObject.transform.SetParent(root.transform, false);
-        GateballMallet mallet = malletObject.AddUdonSharpComponent<GateballMallet>();
-        mallet.StrokeRouter = router;
-
         GameObject rigObject = new GameObject("MalletRig");
         rigObject.transform.SetParent(root.transform, false);
         rigObject.transform.SetPositionAndRotation(new Vector3(1.3f, 0.9f, -6.82f), Quaternion.identity);
@@ -212,6 +207,8 @@ public static class GateballDevelopmentSceneBuilder
         rigBody.useGravity = false;
         rigBody.isKinematic = true;
         rigObject.AddComponent<VRCObjectSync>();
+        GateballMallet mallet = rigObject.AddUdonSharpComponent<GateballMallet>();
+        mallet.StrokeRouter = router;
 
         GameObject shaftObject = CreatePrimitive(
             "Shaft",
@@ -234,8 +231,8 @@ public static class GateballDevelopmentSceneBuilder
         headCollider.isTrigger = true;
         GameObject strikeFaceObject = new GameObject("StrikeFace");
         strikeFaceObject.transform.SetParent(headObject.transform, false);
-        strikeFaceObject.transform.localPosition = new Vector3(0f, 0f, 0.5f);
-        strikeFaceObject.transform.localRotation = Quaternion.identity;
+        strikeFaceObject.transform.localPosition = new Vector3(0.5f, 0f, 0f);
+        strikeFaceObject.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
 
         GameObject gripAObject = CreatePickupGrip(root.transform, "GripA", 0, mallet);
         GameObject gripBObject = CreatePickupGrip(root.transform, "GripB", 1, mallet);

@@ -4,9 +4,11 @@ using VRC.SDKBase;
 
 namespace Pm.Booth.Aoinu607.Udon.Gateball
 {
-    [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
+    [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
     public class GateballMallet : UdonSharpBehaviour
     {
+        private const int NoMalletHolderPlayerId = -1;
+
         [Header("References")]
         public GateballStrokeRouter StrokeRouter;
         public Transform MalletRig;
@@ -47,8 +49,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private Vector3 _measuredHeadVelocity;
         private int _primaryGripIndex = -1;
         private int _secondaryGripIndex = -1;
+        [UdonSynced] private int _holderPlayerId = NoMalletHolderPlayerId;
         private Vector3 _primaryLocalGripPosition;
         private Quaternion _primaryLocalGripRotation = Quaternion.identity;
+        private Vector3 _localShaftDirection = Vector3.down;
         private Vector3 _neutralShaftDirection;
         private Quaternion _neutralMalletRotation = Quaternion.identity;
         private Quaternion _neutralPrimaryGripRotation = Quaternion.identity;
@@ -79,8 +83,49 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 MalletRig = transform;
             }
 
+            _CacheLocalShaftDirection();
             _ResetHistory();
             _SetPreviewVisible(false);
+        }
+
+        public override bool OnOwnershipRequest(VRCPlayerApi requestingPlayer, VRCPlayerApi newOwner)
+        {
+            if (newOwner == null || !Utilities.IsValid(newOwner))
+            {
+                return false;
+            }
+
+            return GateballMalletRules.CanAcquireMalletAuthority(_holderPlayerId, newOwner.playerId);
+        }
+
+        public override void OnDeserialization()
+        {
+            if (!_isLocallyHeld)
+            {
+                return;
+            }
+
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer == null || !Utilities.IsValid(localPlayer)
+                || _holderPlayerId != localPlayer.playerId
+                || !_IsLocalAuthority())
+            {
+                _ClearLocalGripState();
+            }
+        }
+
+        public override void OnPlayerLeft(VRCPlayerApi player)
+        {
+            if (player == null || !Utilities.IsValid(player)
+                || player.playerId != _holderPlayerId
+                || MalletRig == null
+                || !Networking.IsOwner(MalletRig.gameObject))
+            {
+                return;
+            }
+
+            _holderPlayerId = NoMalletHolderPlayerId;
+            RequestSerialization();
         }
 
         private void Update()
@@ -141,7 +186,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _OnGripPicked(int gripIndex)
         {
-            if (!_IsValidGripIndex(gripIndex) || _GetGrip(gripIndex) == null)
+            if (!_IsValidGripIndex(gripIndex) || _GetGrip(gripIndex) == null
+                || !_TryAcquireMalletAuthority())
             {
                 return;
             }
@@ -150,7 +196,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             {
                 _primaryGripIndex = gripIndex;
                 _isLocallyHeld = true;
-                _TakeMalletOwnership();
                 _CaptureSingleHandPose();
                 _ResetHistory();
                 return;
@@ -159,6 +204,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             if (gripIndex == _primaryGripIndex || _secondaryGripIndex >= 0)
             {
                 return;
+            }
+
+            if (_isAimLocked)
+            {
+                _InvalidateAimLock();
             }
 
             _secondaryGripIndex = gripIndex;
@@ -195,12 +245,14 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 _isLocallyHeld = false;
                 _ResetHistory();
                 _SetPreviewVisible(false);
+                _ReleaseMalletAuthority();
             }
         }
 
         public void _OnGripUseDown(int gripIndex)
         {
-            if (gripIndex != _primaryGripIndex || !_isLocallyHeld || _secondaryGripIndex < 0
+            if (gripIndex != _primaryGripIndex || !_isLocallyHeld
+                || !GateballMalletRules.IsValidGripMode(_primaryGripIndex, _secondaryGripIndex)
                 || _isAimLocked || !_IsLocalAuthority() || !_hasValidPreview
                 || _previewBall == null || _IsShotInProgress())
             {
@@ -213,6 +265,39 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
+            _UpdateMalletPose();
+            if (_secondaryGripIndex >= 0)
+            {
+                Transform primaryGrip = _GetGrip(_primaryGripIndex);
+                Transform secondaryGrip = _GetGrip(_secondaryGripIndex);
+                Vector3 currentShaftDirection = secondaryGrip.position - primaryGrip.position;
+                _lockedRollDegrees = GateballMalletRules.CalculateAverageTwistDegrees(
+                    _neutralPrimaryGripRotation,
+                    primaryGrip.rotation,
+                    _neutralSecondaryGripRotation,
+                    secondaryGrip.rotation,
+                    currentShaftDirection);
+            }
+            else
+            {
+                Transform primaryGrip = _GetGrip(_primaryGripIndex);
+                GateballMalletRules.SolveSingleHandPose(
+                    primaryGrip.position,
+                    primaryGrip.rotation,
+                    _primaryLocalGripPosition,
+                    _primaryLocalGripRotation,
+                    out _,
+                    out Quaternion currentMalletRotation);
+                Vector3 localShaftDirection = _GetLocalShaftDirection();
+                Vector3 currentShaftDirection = currentMalletRotation * localShaftDirection;
+                _lockedRollDegrees = GateballMalletRules.CalculatePoseRollDegrees(
+                    _neutralMalletRotation,
+                    _neutralShaftDirection,
+                    currentMalletRotation,
+                    currentShaftDirection,
+                    _GetLocalFaceForward());
+            }
+
             _isAimLocked = true;
             _lockedBall = _previewBall;
             _lockedTargetBallId = _previewBall.BallId;
@@ -222,12 +307,6 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _lockedStrikeFacePosition = StrikeFace.position;
             _lockedHeadRotation = Head == null ? MalletRig.rotation : Head.rotation;
             _lockedPlayerPosition = localPlayer.GetPosition();
-            _lockedRollDegrees = GateballMalletRules.CalculateAverageTwistDegrees(
-                _neutralPrimaryGripRotation,
-                _GetGrip(_primaryGripIndex).rotation,
-                _neutralSecondaryGripRotation,
-                _GetGrip(_secondaryGripIndex).rotation,
-                _neutralShaftDirection);
             _previousStrikeFacePosition = _lockedStrikeFacePosition;
             _ResetHistory();
             _RecordHeadPosition(Head.position, Time.fixedTime);
@@ -295,6 +374,16 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                     _primaryLocalGripRotation,
                     out malletPosition,
                     out malletRotation);
+                if (_isAimLocked)
+                {
+                    Vector3 currentShaftDirection = malletRotation * _GetLocalShaftDirection();
+                    malletRotation = GateballMalletRules.SolveTwoHandRotation(
+                        _neutralMalletRotation,
+                        _neutralShaftDirection,
+                        currentShaftDirection,
+                        _lockedRollDegrees);
+                    malletPosition = primaryGrip.position - malletRotation * _primaryLocalGripPosition;
+                }
             }
 
             MalletRig.position = malletPosition;
@@ -317,6 +406,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             Quaternion inverseMalletRotation = Quaternion.Inverse(MalletRig.rotation);
             _primaryLocalGripPosition = inverseMalletRotation * (primaryGrip.position - MalletRig.position);
             _primaryLocalGripRotation = inverseMalletRotation * primaryGrip.rotation;
+            _neutralMalletRotation = MalletRig.rotation;
+            _neutralShaftDirection = MalletRig.rotation * _GetLocalShaftDirection();
+            _neutralPrimaryGripRotation = primaryGrip.rotation;
             if (_secondaryGripIndex >= 0)
             {
                 _CaptureTwoHandNeutralPose();
@@ -349,7 +441,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         {
             _hasValidPreview = false;
             _previewBall = null;
-            if (_secondaryGripIndex < 0 || StrikeFace == null || HeadCollider == null || _IsShotInProgress()
+            if (!GateballMalletRules.IsValidGripMode(_primaryGripIndex, _secondaryGripIndex)
+                || StrikeFace == null || HeadCollider == null || _IsShotInProgress()
                 || !_TargetSearchDistanceIsValid())
             {
                 _SetPreviewVisible(false);
@@ -479,7 +572,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private bool _IsAimLockValid()
         {
-            if (!_isAimLocked || !_isLocallyHeld || _primaryGripIndex < 0 || _secondaryGripIndex < 0
+            if (!_isAimLocked || !_isLocallyHeld
+                || !GateballMalletRules.IsValidGripMode(_primaryGripIndex, _secondaryGripIndex)
                 || !_IsLocalAuthority() || _lockedBall == null || !_lockedBall.isActiveAndEnabled
                 || !_lockedBall._IsReady() || _lockedBall.BallId != _lockedTargetBallId
                 || Networking.LocalPlayer == null || !Utilities.IsValid(Networking.LocalPlayer))
@@ -530,20 +624,104 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         private bool _IsLocalAuthority()
         {
-            if (Networking.LocalPlayer == null || MalletRig == null)
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer == null || !Utilities.IsValid(localPlayer) || MalletRig == null)
             {
                 return true;
             }
 
-            return Networking.IsOwner(Networking.LocalPlayer, MalletRig.gameObject);
+            return _holderPlayerId == NoMalletHolderPlayerId
+                || (_holderPlayerId == localPlayer.playerId
+                    && Networking.IsOwner(localPlayer, MalletRig.gameObject));
         }
 
-        private void _TakeMalletOwnership()
+        private bool _TryAcquireMalletAuthority()
         {
-            if (MalletRig != null && Networking.LocalPlayer != null)
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer == null || !Utilities.IsValid(localPlayer) || MalletRig == null)
             {
-                Networking.SetOwner(Networking.LocalPlayer, MalletRig.gameObject);
+                return true;
             }
+
+            if (!GateballMalletRules.CanAcquireMalletAuthority(_holderPlayerId, localPlayer.playerId))
+            {
+                return false;
+            }
+
+            if (!Networking.IsOwner(localPlayer, MalletRig.gameObject))
+            {
+                Networking.SetOwner(localPlayer, MalletRig.gameObject);
+            }
+
+            if (!Networking.IsOwner(localPlayer, MalletRig.gameObject))
+            {
+                return false;
+            }
+
+            if (_holderPlayerId == NoMalletHolderPlayerId)
+            {
+                _holderPlayerId = localPlayer.playerId;
+                RequestSerialization();
+            }
+
+            return _holderPlayerId == localPlayer.playerId;
+        }
+
+        private void _ReleaseMalletAuthority()
+        {
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer == null || !Utilities.IsValid(localPlayer)
+                || MalletRig == null
+                || _holderPlayerId != localPlayer.playerId
+                || !Networking.IsOwner(localPlayer, MalletRig.gameObject))
+            {
+                return;
+            }
+
+            _holderPlayerId = NoMalletHolderPlayerId;
+            RequestSerialization();
+        }
+
+        private void _ClearLocalGripState()
+        {
+            _primaryGripIndex = -1;
+            _secondaryGripIndex = -1;
+            _isLocallyHeld = false;
+            _InvalidateAimLock();
+            _ResetHistory();
+            _SetPreviewVisible(false);
+        }
+
+        private void _CacheLocalShaftDirection()
+        {
+            if (MalletRig == null || GripA == null || GripB == null)
+            {
+                return;
+            }
+
+            Vector3 shaftDirection = MalletRig.InverseTransformDirection(GripB.position - GripA.position);
+            if (shaftDirection.sqrMagnitude > 0.0001f)
+            {
+                _localShaftDirection = shaftDirection.normalized;
+            }
+        }
+
+        private Vector3 _GetLocalShaftDirection()
+        {
+            return _localShaftDirection.sqrMagnitude > 0.0001f
+                ? _localShaftDirection.normalized
+                : Vector3.down;
+        }
+
+        private Vector3 _GetLocalFaceForward()
+        {
+            if (MalletRig == null || StrikeFace == null)
+            {
+                return Vector3.forward;
+            }
+
+            Vector3 localForward = MalletRig.InverseTransformDirection(StrikeFace.forward);
+            return localForward.sqrMagnitude > 0.0001f ? localForward.normalized : Vector3.forward;
         }
 
         private void _RecordHeadPosition(Vector3 position, float time)
@@ -568,10 +746,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private Vector3 _GetFaceHalfExtents()
         {
             Vector3 scale = HeadCollider.transform.lossyScale;
-            return new Vector3(
-                Mathf.Abs(HeadCollider.size.x * scale.x) * 0.5f,
-                Mathf.Abs(HeadCollider.size.y * scale.y) * 0.5f,
-                Mathf.Max(0.001f, PreviewBoxDepth * 0.5f));
+            return GateballMalletRules.CalculateStrikeFaceHalfExtents(
+                HeadCollider.size,
+                scale,
+                PreviewBoxDepth);
         }
 
         private Transform _GetGrip(int gripIndex)
