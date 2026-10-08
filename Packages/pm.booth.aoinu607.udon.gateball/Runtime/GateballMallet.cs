@@ -1,13 +1,17 @@
 using UdonSharp;
 using UnityEngine;
+using VRC.SDK3.UdonNetworkCalling;
 using VRC.SDKBase;
+using VRC.Udon.Common.Interfaces;
 
 namespace Pm.Booth.Aoinu607.Udon.Gateball
 {
-    [UdonBehaviourSyncMode(BehaviourSyncMode.Manual)]
+    [UdonBehaviourSyncMode(BehaviourSyncMode.NoVariableSync)]
     public class GateballMallet : UdonSharpBehaviour
     {
         private const int NoMalletHolderPlayerId = -1;
+        private const int RequestMalletAuthority = 0;
+        private const int CancelMalletAuthorityRequest = 1;
 
         [Header("References")]
         public GateballStrokeRouter StrokeRouter;
@@ -49,7 +53,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private Vector3 _measuredHeadVelocity;
         private int _primaryGripIndex = -1;
         private int _secondaryGripIndex = -1;
-        [UdonSynced] private int _holderPlayerId = NoMalletHolderPlayerId;
+        private int _localHolderPlayerId = NoMalletHolderPlayerId;
+        private int _pendingGripIndex = -1;
+        private int _waitingPlayerId = NoMalletHolderPlayerId;
         private Vector3 _primaryLocalGripPosition;
         private Quaternion _primaryLocalGripRotation = Quaternion.identity;
         private Vector3 _localShaftDirection = Vector3.down;
@@ -90,42 +96,73 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public override bool OnOwnershipRequest(VRCPlayerApi requestingPlayer, VRCPlayerApi newOwner)
         {
-            if (newOwner == null || !Utilities.IsValid(newOwner))
-            {
-                return false;
-            }
-
-            return GateballMalletRules.CanAcquireMalletAuthority(_holderPlayerId, newOwner.playerId);
+            // Keep requester and owner decisions identical; the current owner arbitrates claims separately.
+            return true;
         }
 
-        public override void OnDeserialization()
+        public override void OnOwnershipTransferred(VRCPlayerApi player)
         {
-            if (!_isLocallyHeld)
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (player == null || localPlayer == null || !Utilities.IsValid(localPlayer)
+                || MalletRig == null)
             {
                 return;
             }
 
-            VRCPlayerApi localPlayer = Networking.LocalPlayer;
-            if (localPlayer == null || !Utilities.IsValid(localPlayer)
-                || _holderPlayerId != localPlayer.playerId
-                || !_IsLocalAuthority())
+            if (Networking.IsOwner(localPlayer, MalletRig.gameObject))
+            {
+                if (_pendingGripIndex >= 0 && _IsValidGripIndex(_pendingGripIndex)
+                    && _GetGrip(_pendingGripIndex) != null)
+                {
+                    _localHolderPlayerId = localPlayer.playerId;
+                    int gripIndex = _pendingGripIndex;
+                    _pendingGripIndex = -1;
+                    _SetPrimaryGrip(gripIndex);
+                }
+                else if (!_isLocallyHeld)
+                {
+                    _localHolderPlayerId = NoMalletHolderPlayerId;
+                }
+
+                _waitingPlayerId = NoMalletHolderPlayerId;
+                return;
+            }
+
+            _localHolderPlayerId = NoMalletHolderPlayerId;
+            _waitingPlayerId = NoMalletHolderPlayerId;
+            if (_isLocallyHeld)
             {
                 _ClearLocalGripState();
+            }
+
+            if (_pendingGripIndex >= 0 && _IsValidGripIndex(_pendingGripIndex)
+                && _GetGrip(_pendingGripIndex) != null)
+            {
+                SendCustomNetworkEvent(
+                    NetworkEventTarget.Owner,
+                    nameof(_OwnerHandleMalletAuthorityRequest),
+                    RequestMalletAuthority);
             }
         }
 
         public override void OnPlayerLeft(VRCPlayerApi player)
         {
             if (player == null || !Utilities.IsValid(player)
-                || player.playerId != _holderPlayerId
                 || MalletRig == null
                 || !Networking.IsOwner(MalletRig.gameObject))
             {
                 return;
             }
 
-            _holderPlayerId = NoMalletHolderPlayerId;
-            RequestSerialization();
+            if (player.playerId == _waitingPlayerId)
+            {
+                _waitingPlayerId = NoMalletHolderPlayerId;
+            }
+
+            if (player.playerId == _localHolderPlayerId && !_isLocallyHeld)
+            {
+                _localHolderPlayerId = NoMalletHolderPlayerId;
+            }
         }
 
         private void Update()
@@ -186,12 +223,37 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _OnGripPicked(int gripIndex)
         {
-            if (!_IsValidGripIndex(gripIndex) || _GetGrip(gripIndex) == null
-                || !_TryAcquireMalletAuthority())
+            if (!_IsValidGripIndex(gripIndex) || _GetGrip(gripIndex) == null)
             {
                 return;
             }
 
+            if (_isLocallyHeld)
+            {
+                if (!_IsLocalAuthority())
+                {
+                    return;
+                }
+
+                _AddSecondaryGrip(gripIndex);
+                return;
+            }
+
+            if (_pendingGripIndex >= 0)
+            {
+                return;
+            }
+
+            if (!_TryAcquireMalletAuthority(gripIndex))
+            {
+                return;
+            }
+
+            _SetPrimaryGrip(gripIndex);
+        }
+
+        private void _SetPrimaryGrip(int gripIndex)
+        {
             if (_primaryGripIndex < 0)
             {
                 _primaryGripIndex = gripIndex;
@@ -201,6 +263,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return;
             }
 
+            _AddSecondaryGrip(gripIndex);
+        }
+
+        private void _AddSecondaryGrip(int gripIndex)
+        {
             if (gripIndex == _primaryGripIndex || _secondaryGripIndex >= 0)
             {
                 return;
@@ -217,6 +284,16 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
         public void _OnGripDropped(int gripIndex)
         {
+            if (gripIndex == _pendingGripIndex)
+            {
+                _pendingGripIndex = -1;
+                SendCustomNetworkEvent(
+                    NetworkEventTarget.Owner,
+                    nameof(_OwnerHandleMalletAuthorityRequest),
+                    CancelMalletAuthorityRequest);
+                return;
+            }
+
             if (gripIndex != _primaryGripIndex && gripIndex != _secondaryGripIndex)
             {
                 return;
@@ -630,12 +707,12 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return true;
             }
 
-            return _holderPlayerId == NoMalletHolderPlayerId
-                || (_holderPlayerId == localPlayer.playerId
-                    && Networking.IsOwner(localPlayer, MalletRig.gameObject));
+            return Networking.IsOwner(localPlayer, MalletRig.gameObject)
+                && (_localHolderPlayerId == NoMalletHolderPlayerId
+                    || _localHolderPlayerId == localPlayer.playerId);
         }
 
-        private bool _TryAcquireMalletAuthority()
+        private bool _TryAcquireMalletAuthority(int gripIndex)
         {
             VRCPlayerApi localPlayer = Networking.LocalPlayer;
             if (localPlayer == null || !Utilities.IsValid(localPlayer) || MalletRig == null)
@@ -643,28 +720,23 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 return true;
             }
 
-            if (!GateballMalletRules.CanAcquireMalletAuthority(_holderPlayerId, localPlayer.playerId))
+            if (Networking.IsOwner(localPlayer, MalletRig.gameObject))
             {
-                return false;
+                if (!GateballMalletRules.CanAcquireMalletAuthority(_localHolderPlayerId, localPlayer.playerId))
+                {
+                    return false;
+                }
+
+                _localHolderPlayerId = localPlayer.playerId;
+                return true;
             }
 
-            if (!Networking.IsOwner(localPlayer, MalletRig.gameObject))
-            {
-                Networking.SetOwner(localPlayer, MalletRig.gameObject);
-            }
-
-            if (!Networking.IsOwner(localPlayer, MalletRig.gameObject))
-            {
-                return false;
-            }
-
-            if (_holderPlayerId == NoMalletHolderPlayerId)
-            {
-                _holderPlayerId = localPlayer.playerId;
-                RequestSerialization();
-            }
-
-            return _holderPlayerId == localPlayer.playerId;
+            _pendingGripIndex = gripIndex;
+            SendCustomNetworkEvent(
+                NetworkEventTarget.Owner,
+                nameof(_OwnerHandleMalletAuthorityRequest),
+                RequestMalletAuthority);
+            return false;
         }
 
         private void _ReleaseMalletAuthority()
@@ -672,14 +744,145 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             VRCPlayerApi localPlayer = Networking.LocalPlayer;
             if (localPlayer == null || !Utilities.IsValid(localPlayer)
                 || MalletRig == null
-                || _holderPlayerId != localPlayer.playerId
                 || !Networking.IsOwner(localPlayer, MalletRig.gameObject))
             {
                 return;
             }
 
-            _holderPlayerId = NoMalletHolderPlayerId;
-            RequestSerialization();
+            _localHolderPlayerId = NoMalletHolderPlayerId;
+            if (_waitingPlayerId < 0)
+            {
+                return;
+            }
+
+            VRCPlayerApi waitingPlayer = VRCPlayerApi.GetPlayerById(_waitingPlayerId);
+            _waitingPlayerId = NoMalletHolderPlayerId;
+            if (waitingPlayer != null && Utilities.IsValid(waitingPlayer))
+            {
+                _TransferMalletAuthority(waitingPlayer);
+            }
+        }
+
+        [NetworkCallable]
+        public void _OwnerHandleMalletAuthorityRequest(int requestType)
+        {
+            if (!NetworkCalling.InNetworkCall || MalletRig == null
+                || !Networking.IsOwner(MalletRig.gameObject))
+            {
+                return;
+            }
+
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer != null && Utilities.IsValid(localPlayer)
+                && _pendingGripIndex >= 0 && !_isLocallyHeld)
+            {
+                _localHolderPlayerId = localPlayer.playerId;
+                int pendingGripIndex = _pendingGripIndex;
+                _pendingGripIndex = -1;
+                _SetPrimaryGrip(pendingGripIndex);
+            }
+
+            VRCPlayerApi requestingPlayer = NetworkCalling.CallingPlayer;
+            if (requestingPlayer == null || !Utilities.IsValid(requestingPlayer))
+            {
+                return;
+            }
+
+            if (requestType == CancelMalletAuthorityRequest)
+            {
+                if (requestingPlayer.playerId == _waitingPlayerId)
+                {
+                    _waitingPlayerId = NoMalletHolderPlayerId;
+                }
+
+                return;
+            }
+
+            if (requestType != RequestMalletAuthority)
+            {
+                return;
+            }
+
+            bool hasCurrentHolder = _isLocallyHeld
+                || _localHolderPlayerId != NoMalletHolderPlayerId;
+            if (hasCurrentHolder
+                || !GateballMalletRules.CanAcquireMalletAuthority(
+                    _localHolderPlayerId,
+                    requestingPlayer.playerId))
+            {
+                if (_waitingPlayerId == NoMalletHolderPlayerId
+                    || _waitingPlayerId == requestingPlayer.playerId)
+                {
+                    _waitingPlayerId = requestingPlayer.playerId;
+                }
+                else
+                {
+                    _SendMalletAuthorityDenied(requestingPlayer.playerId);
+                }
+
+                return;
+            }
+
+            _waitingPlayerId = NoMalletHolderPlayerId;
+            _TransferMalletAuthority(requestingPlayer);
+        }
+
+        [NetworkCallable(1)]
+        public void _ReceiveMalletAuthorityDenied(int requestingPlayerId)
+        {
+            if (!NetworkCalling.InNetworkCall || MalletRig == null)
+            {
+                return;
+            }
+
+            VRCPlayerApi sender = NetworkCalling.CallingPlayer;
+            VRCPlayerApi owner = Networking.GetOwner(MalletRig.gameObject);
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (sender == null || !Utilities.IsValid(sender)
+                || owner == null || !Utilities.IsValid(owner)
+                || sender.playerId != owner.playerId
+                || localPlayer == null || !Utilities.IsValid(localPlayer)
+                || localPlayer.playerId != requestingPlayerId)
+            {
+                return;
+            }
+
+            _pendingGripIndex = -1;
+        }
+
+        private void _SendMalletAuthorityDenied(int requestingPlayerId)
+        {
+            SendCustomNetworkEvent(
+                NetworkEventTarget.All,
+                nameof(_ReceiveMalletAuthorityDenied),
+                requestingPlayerId);
+        }
+
+        private void _TransferMalletAuthority(VRCPlayerApi newOwner)
+        {
+            if (newOwner == null || !Utilities.IsValid(newOwner)
+                || MalletRig == null || !Networking.IsOwner(MalletRig.gameObject))
+            {
+                return;
+            }
+
+            VRCPlayerApi localPlayer = Networking.LocalPlayer;
+            if (localPlayer != null && Utilities.IsValid(localPlayer)
+                && newOwner.playerId == localPlayer.playerId)
+            {
+                _localHolderPlayerId = localPlayer.playerId;
+                if (_pendingGripIndex >= 0)
+                {
+                    int gripIndex = _pendingGripIndex;
+                    _pendingGripIndex = -1;
+                    _SetPrimaryGrip(gripIndex);
+                }
+
+                return;
+            }
+
+            _localHolderPlayerId = NoMalletHolderPlayerId;
+            Networking.SetOwner(newOwner, MalletRig.gameObject);
         }
 
         private void _ClearLocalGripState()

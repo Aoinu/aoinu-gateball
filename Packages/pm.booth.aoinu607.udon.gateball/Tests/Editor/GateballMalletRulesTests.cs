@@ -6,6 +6,107 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball.Tests
     public class GateballMalletRulesTests
     {
         [Test]
+        public void MalletAuthorityCanOnlyBeAcquiredWhenUnheldOrAlreadyHeldByRequester()
+        {
+            Assert.IsTrue(GateballMalletRules.CanAcquireMalletAuthority(-1, 2));
+            Assert.IsTrue(GateballMalletRules.CanAcquireMalletAuthority(2, 2));
+            Assert.IsFalse(GateballMalletRules.CanAcquireMalletAuthority(1, 2));
+            Assert.IsFalse(GateballMalletRules.CanAcquireMalletAuthority(-1, -1));
+        }
+
+        [Test]
+        public void OneHandGripModeIsValidWithoutSecondaryGrip()
+        {
+            Assert.IsTrue(GateballMalletRules.IsValidGripMode(0, -1));
+            Assert.IsTrue(GateballMalletRules.IsValidGripMode(1, -1));
+        }
+
+        [Test]
+        public void OneHandAimLockRollReconstructsCurrentMalletRotation()
+        {
+            Quaternion neutralMalletRotation = Quaternion.Euler(13f, -20f, 7f);
+            Vector3 neutralShaftDirection = Vector3.down;
+            Quaternion currentMalletRotation = Quaternion.Euler(38f, 24f, -17f) * neutralMalletRotation;
+            Vector3 currentShaftDirection = currentMalletRotation * neutralShaftDirection;
+
+            float lockedRoll = GateballMalletRules.CalculatePoseRollDegrees(
+                neutralMalletRotation,
+                neutralShaftDirection,
+                currentMalletRotation,
+                currentShaftDirection,
+                Vector3.forward);
+            Quaternion lockedMalletRotation = GateballMalletRules.SolveTwoHandRotation(
+                neutralMalletRotation,
+                neutralShaftDirection,
+                currentShaftDirection,
+                lockedRoll);
+
+            Assert.Less(Quaternion.Angle(currentMalletRotation, lockedMalletRotation), 0.001f);
+        }
+
+        [Test]
+        public void StrikeFaceHalfExtentsUseHeadEndFaceDimensions()
+        {
+            Vector3 halfExtents = GateballMalletRules.CalculateStrikeFaceHalfExtents(
+                new Vector3(0.65f, 0.18f, 0.22f),
+                Vector3.one,
+                0.02f);
+
+            Assert.AreEqual(0.11f, halfExtents.x, 0.0001f);
+            Assert.AreEqual(0.09f, halfExtents.y, 0.0001f);
+            Assert.AreEqual(0.01f, halfExtents.z, 0.0001f);
+        }
+
+        [Test]
+        public void TiltedShaftAimLockKeepsMalletRotationContinuous()
+        {
+            Quaternion neutralMalletRotation = Quaternion.identity;
+            Vector3 neutralShaftDirection = Vector3.down;
+            Vector3 currentShaftDirection = Quaternion.AngleAxis(35f, Vector3.forward)
+                * neutralShaftDirection;
+            Quaternion neutralPrimaryRotation = Quaternion.identity;
+            Quaternion neutralSecondaryRotation = Quaternion.identity;
+            Quaternion currentPrimaryRotation = Quaternion.AngleAxis(42f, currentShaftDirection);
+            Quaternion currentSecondaryRotation = Quaternion.AngleAxis(26f, currentShaftDirection);
+
+            float aimingRoll = GateballMalletRules.ResolveTwoHandRollDegrees(
+                false,
+                0f,
+                neutralPrimaryRotation,
+                currentPrimaryRotation,
+                neutralSecondaryRotation,
+                currentSecondaryRotation,
+                currentShaftDirection);
+            float neutralAxisRoll = GateballMalletRules.CalculateAverageTwistDegrees(
+                neutralPrimaryRotation,
+                currentPrimaryRotation,
+                neutralSecondaryRotation,
+                currentSecondaryRotation,
+                neutralShaftDirection);
+            float lockedRoll = GateballMalletRules.ResolveTwoHandRollDegrees(
+                true,
+                aimingRoll,
+                neutralPrimaryRotation,
+                currentPrimaryRotation,
+                neutralSecondaryRotation,
+                currentSecondaryRotation,
+                currentShaftDirection);
+            Quaternion aimingRotation = GateballMalletRules.SolveTwoHandRotation(
+                neutralMalletRotation,
+                neutralShaftDirection,
+                currentShaftDirection,
+                aimingRoll);
+            Quaternion lockedRotation = GateballMalletRules.SolveTwoHandRotation(
+                neutralMalletRotation,
+                neutralShaftDirection,
+                currentShaftDirection,
+                lockedRoll);
+
+            Assert.Greater(Mathf.Abs(Mathf.DeltaAngle(neutralAxisRoll, aimingRoll)), 1f);
+            Assert.Less(Quaternion.Angle(aimingRotation, lockedRotation), 0.001f);
+        }
+
+        [Test]
         public void TimeWindowVelocityIsStableAcrossSampleIntervals()
         {
             Vector3[] fastPositions =
