@@ -108,6 +108,29 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             }
         }
 
+        public void _ApplyInitialVelocities(Vector3 initialLinearVelocity, Vector3 initialAngularVelocity)
+        {
+            if (!_initialized || Body == null)
+            {
+                return;
+            }
+
+            Body.WakeUp();
+            Body.velocity = initialLinearVelocity;
+            Body.angularVelocity = initialAngularVelocity;
+            _hasMoved = initialLinearVelocity.sqrMagnitude > 0.000001f
+                || initialAngularVelocity.sqrMagnitude > 0.000001f;
+            _stillTime = 0f;
+
+            if (Court != null)
+            {
+                Court._NotifyStroke(
+                    this,
+                    GateballGeometry.NormalizeStrokeDirection(initialLinearVelocity),
+                    initialLinearVelocity.magnitude * Body.mass);
+            }
+        }
+
         public void _ResetBall()
         {
             if (Body == null)

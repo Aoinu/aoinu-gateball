@@ -9,11 +9,9 @@ using GateballGatePost = Pm.Booth.Aoinu607.Udon.Gateball.GateballGatePost;
 using GateballGeometry = Pm.Booth.Aoinu607.Udon.Gateball.GateballGeometry;
 using GateballGoalPole = Pm.Booth.Aoinu607.Udon.Gateball.GateballGoalPole;
 using GateballMallet = Pm.Booth.Aoinu607.Udon.Gateball.GateballMallet;
+using GateballMalletGrip = Pm.Booth.Aoinu607.Udon.Gateball.GateballMalletGrip;
 using GateballDebugDisplay = Pm.Booth.Aoinu607.Udon.Gateball.GateballDebugDisplay;
 using GateballNetworkState = Pm.Booth.Aoinu607.Udon.Gateball.GateballNetworkState;
-using GateballGameplayState = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayState;
-using GateballGameplayControls = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayControls;
-using GateballGameplayRules = Pm.Booth.Aoinu607.Udon.Gateball.GateballGameplayRules;
 using GateballStrokeRouter = Pm.Booth.Aoinu607.Udon.Gateball.GateballStrokeRouter;
 using GateballTestShotController = Pm.Booth.Aoinu607.Udon.Gateball.GateballTestShotController;
 using GateballTelemetry = Pm.Booth.Aoinu607.Udon.Gateball.GateballTelemetry;
@@ -26,6 +24,7 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 using VRCPickup = VRC.SDK3.Components.VRCPickup;
+using VRCObjectSync = VRC.SDK3.Components.VRCObjectSync;
 using VRCSceneDescriptor = VRC.SDK3.Components.VRCSceneDescriptor;
 
 public static class GateballDevelopmentSceneBuilder
@@ -137,11 +136,8 @@ public static class GateballDevelopmentSceneBuilder
 
         GateballTelemetry telemetry = CreateUdonObject<GateballTelemetry>(root.transform, "Telemetry");
         GateballNetworkState networkState = CreateUdonObject<GateballNetworkState>(root.transform, "NetworkState");
-        GateballGameplayState gameplay = networkState.gameObject.AddUdonSharpComponent<GateballGameplayState>();
         networkState.Court = court;
         networkState.Telemetry = telemetry;
-        gameplay.Court = court;
-        gameplay.NetworkState = networkState;
         court.Telemetry = telemetry;
 
         CreatePrimitive("CourtFloor", PrimitiveType.Cube, courtObject.transform, new Vector3(0f, -0.10f, 0f), new Vector3(GateballGeometry.CourtWidth, 0.20f, GateballGeometry.CourtLength), floorMaterial, EnvironmentLayer);
@@ -204,66 +200,100 @@ public static class GateballDevelopmentSceneBuilder
         router.NetworkState = networkState;
         router.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
 
-        GameObject malletObject = CreatePrimitive("VRMallet", PrimitiveType.Cylinder, root.transform, new Vector3(3f, 1.3f, -7f), new Vector3(0.12f, 0.75f, 0.12f), toolMaterial, PickupLayer);
-        Collider malletCollider = malletObject.GetComponent<Collider>();
-        malletCollider.isTrigger = true;
-        Rigidbody malletBody = malletObject.AddComponent<Rigidbody>();
-        malletBody.useGravity = false;
-        malletBody.isKinematic = false;
-        VRCPickup pickup = malletObject.AddComponent<VRCPickup>();
-        pickup.pickupable = true;
-        pickup.proximity = 3f;
-
-        GameObject headObject = CreatePrimitive("Head", PrimitiveType.Cube, malletObject.transform, new Vector3(0f, -0.75f, 0f), new Vector3(0.65f, 0.18f, 0.22f), toolMaterial, PickupLayer);
-        headObject.GetComponent<Collider>().isTrigger = true;
-        GameObject proxyObject = new GameObject("PhysicsProxy");
-        proxyObject.transform.SetParent(malletObject.transform, false);
-        proxyObject.transform.localPosition = new Vector3(0f, -0.75f, 0f);
-        proxyObject.transform.localScale = Vector3.one * 0.18f;
-        SphereCollider proxyCollider = proxyObject.AddComponent<SphereCollider>();
-        proxyCollider.isTrigger = true;
-        GateballMallet mallet = malletObject.AddUdonSharpComponent<GateballMallet>();
-        mallet.Gameplay = gameplay;
+        GameObject rigObject = new GameObject("MalletRig");
+        rigObject.transform.SetParent(root.transform, false);
+        rigObject.transform.SetPositionAndRotation(new Vector3(1.3f, 0.9f, -6.82f), Quaternion.identity);
+        Rigidbody rigBody = rigObject.AddComponent<Rigidbody>();
+        rigBody.useGravity = false;
+        rigBody.isKinematic = true;
+        rigObject.AddComponent<VRCObjectSync>();
+        GateballMallet mallet = rigObject.AddUdonSharpComponent<GateballMallet>();
         mallet.StrokeRouter = router;
+
+        GameObject shaftObject = CreatePrimitive(
+            "Shaft",
+            PrimitiveType.Cylinder,
+            rigObject.transform,
+            new Vector3(0f, 0.16f, 0f),
+            new Vector3(0.035f, 0.52f, 0.035f),
+            toolMaterial,
+            PickupLayer);
+        UnityEngine.Object.DestroyImmediate(shaftObject.GetComponent<Collider>());
+        GameObject headObject = CreatePrimitive(
+            "Head",
+            PrimitiveType.Cube,
+            rigObject.transform,
+            new Vector3(0f, -0.75f, 0f),
+            new Vector3(0.65f, 0.18f, 0.22f),
+            toolMaterial,
+            PickupLayer);
+        BoxCollider headCollider = headObject.GetComponent<BoxCollider>();
+        headCollider.isTrigger = true;
+        GameObject strikeFaceObject = new GameObject("StrikeFace");
+        strikeFaceObject.transform.SetParent(headObject.transform, false);
+        strikeFaceObject.transform.localPosition = new Vector3(0.5f, 0f, 0f);
+        strikeFaceObject.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
+        GameObject gripAObject = CreatePickupGrip(root.transform, "GripA", 0, mallet);
+        GameObject gripBObject = CreatePickupGrip(root.transform, "GripB", 1, mallet);
+        gripAObject.transform.SetPositionAndRotation(
+            rigObject.transform.TransformPoint(new Vector3(0f, 0.55f, 0f)), rigObject.transform.rotation);
+        gripBObject.transform.SetPositionAndRotation(
+            rigObject.transform.TransformPoint(new Vector3(0f, -0.15f, 0f)), rigObject.transform.rotation);
+
+        GameObject lineObject = new GameObject("AimPreview");
+        lineObject.transform.SetParent(rigObject.transform, false);
+        LineRenderer aimLine = lineObject.AddComponent<LineRenderer>();
+        aimLine.useWorldSpace = true;
+        aimLine.positionCount = 2;
+        aimLine.startWidth = 0.015f;
+        aimLine.endWidth = 0.008f;
+        aimLine.material = toolMaterial;
+        aimLine.enabled = false;
+
+        mallet.MalletRig = rigObject.transform;
+        mallet.GripA = gripAObject.transform;
+        mallet.GripB = gripBObject.transform;
         mallet.Head = headObject.transform;
-        mallet.HeadCollider = headObject.GetComponent<Collider>();
-        mallet.PhysicsProxy = proxyCollider;
-        mallet.ProxyRadius = GateballGeometry.BallRadius + 0.02f;
-        mallet.BallLayer = PickupLayer;
-        mallet.StrikeScale = 0.45f;
-        mallet.MinimumImpulse = GateballGeometry.WeakStrokeImpulse;
-        mallet.MaximumImpulse = GateballGeometry.StrongStrokeImpulse;
+        mallet.StrikeFace = strikeFaceObject.transform;
+        mallet.HeadCollider = headCollider;
+        mallet.AimPreview = aimLine;
+        mallet.AimLayerMask = (1 << PickupLayer) | (1 << EnvironmentLayer);
+        mallet.VelocityWindowSeconds = 0.03f;
+        mallet.DeadzoneSpeed = 0.10f;
+        mallet.BallSpeedPerMalletSpeed = 1f;
+        mallet.MaximumBallSpeed = 6f;
+        mallet.AimAssistStrength = 0.75f;
+        mallet.MaxAimDeviationDegrees = 12f;
+        mallet.InvalidSwingAngleDegrees = 90f;
+        EditorUtility.SetDirty(mallet);
+        EditorUtility.SetDirty(rigBody);
+        EditorUtility.SetDirty(rigObject.GetComponent<VRCObjectSync>());
+        EditorUtility.SetDirty(gripAObject.GetComponent<GateballMalletGrip>());
+        EditorUtility.SetDirty(gripBObject.GetComponent<GateballMalletGrip>());
+
+        GameObject gripAVisual = CreatePrimitive(
+            "GripAVisual", PrimitiveType.Cylinder, rigObject.transform,
+            new Vector3(0f, 0.55f, 0f), new Vector3(0.05f, 0.08f, 0.05f), toolMaterial, PickupLayer);
+        GameObject gripBVisual = CreatePrimitive(
+            "GripBVisual", PrimitiveType.Cylinder, rigObject.transform,
+            new Vector3(0f, -0.15f, 0f), new Vector3(0.05f, 0.08f, 0.05f), toolMaterial, PickupLayer);
+        UnityEngine.Object.DestroyImmediate(gripAVisual.GetComponent<Collider>());
+        UnityEngine.Object.DestroyImmediate(gripBVisual.GetComponent<Collider>());
 
         GameObject desktopObject = CreatePrimitive("DesktopControls", PrimitiveType.Cube, root.transform, new Vector3(-4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballDesktopController desktop = desktopObject.AddUdonSharpComponent<GateballDesktopController>();
-        desktop.Gameplay = gameplay;
         desktop.StrokeRouter = router;
         desktop.SelectedBallId = 1;
         desktop.Power = GateballGeometry.NormalStrokeImpulse;
         desktop.MinimumPower = GateballGeometry.WeakStrokeImpulse;
         desktop.MaximumPower = GateballGeometry.StrongStrokeImpulse;
 
-        GameObject practiceObject = CreatePrimitive("PracticeMode", PrimitiveType.Cube, root.transform, new Vector3(-2.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
-        GateballGameplayControls practiceControls = practiceObject.AddUdonSharpComponent<GateballGameplayControls>();
-        practiceControls.GameplayState = gameplay;
-        practiceControls.Mode = GateballGameplayRules.ModePractice;
-
-        GameObject matchObject = CreatePrimitive("MatchMode", PrimitiveType.Cube, root.transform, new Vector3(2.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
-        GateballGameplayControls matchControls = matchObject.AddUdonSharpComponent<GateballGameplayControls>();
-        matchControls.GameplayState = gameplay;
-        matchControls.Mode = GateballGameplayRules.ModeMatch;
-
-        GameObject sparkObject = CreatePrimitive("SparkPlacement", PrimitiveType.Cube, root.transform, new Vector3(0.0f, 0.45f, -8.5f), new Vector3(1.2f, 0.8f, 0.25f), toolMaterial, 0);
-        GateballGameplayControls sparkControls = sparkObject.AddUdonSharpComponent<GateballGameplayControls>();
-        sparkControls.GameplayState = gameplay;
-        sparkControls.Mode = GateballGameplayRules.ModePractice;
-
         GameObject testShotObject = CreatePrimitive("TestShotController", PrimitiveType.Cube, root.transform, new Vector3(4.0f, 0.45f, -8.5f), new Vector3(1.6f, 0.8f, 0.25f), toolMaterial, 0);
         GateballTestShotController testShot = testShotObject.AddUdonSharpComponent<GateballTestShotController>();
         testShot.Court = court;
         testShot.StrokeRouter = router;
         testShot.NetworkState = networkState;
-        testShot.Gameplay = gameplay;
         testShot.AutoRunOnStart = false;
         testShot.AutoRunPlayerId = 1;
         testShot.AutoRunDelaySeconds = 2f;
@@ -288,7 +318,6 @@ public static class GateballDevelopmentSceneBuilder
         debugText.verticalOverflow = VerticalWrapMode.Overflow;
         GateballDebugDisplay debugDisplay = debugTextObject.AddUdonSharpComponent<GateballDebugDisplay>();
         debugDisplay.NetworkState = networkState;
-        debugDisplay.Gameplay = gameplay;
         debugDisplay.Telemetry = telemetry;
         debugDisplay.Text = debugText;
 
@@ -300,10 +329,6 @@ public static class GateballDevelopmentSceneBuilder
         EditorUtility.SetDirty(testShot);
         EditorUtility.SetDirty(telemetry);
         EditorUtility.SetDirty(networkState);
-        EditorUtility.SetDirty(gameplay);
-        EditorUtility.SetDirty(practiceControls);
-        EditorUtility.SetDirty(matchControls);
-        EditorUtility.SetDirty(sparkControls);
         EditorUtility.SetDirty(debugDisplay);
 
         CreateSpawns(root.transform);
@@ -311,7 +336,7 @@ public static class GateballDevelopmentSceneBuilder
         EditorSceneManager.MarkSceneDirty(scene);
         EditorSceneManager.SaveScene(scene);
         AssetDatabase.SaveAssets();
-        Debug.Log("[GateballDevelopmentSceneBuilder] Development scene built with 10 balls, 3 gates, 1 goal pole, and VR/Desktop controls.");
+        Debug.Log("[GateballDevelopmentSceneBuilder] Physics sandbox built with 10 balls, 3 gates, 1 goal pole, two Grip pickups, and Desktop controls.");
     }
 
     private static GateballGate CreateGate(Transform parent, int gateIndex, Vector3 position, Material material)
@@ -350,6 +375,30 @@ public static class GateballDevelopmentSceneBuilder
         GameObject gameObject = new GameObject(name);
         gameObject.transform.SetParent(parent, false);
         return gameObject.AddUdonSharpComponent<T>();
+    }
+
+    private static GameObject CreatePickupGrip(
+        Transform parent,
+        string name,
+        int gripIndex,
+        GateballMallet mallet)
+    {
+        GameObject gripObject = new GameObject(name);
+        gripObject.layer = PickupLayer;
+        gripObject.transform.SetParent(parent, false);
+        BoxCollider collider = gripObject.AddComponent<BoxCollider>();
+        collider.size = new Vector3(0.14f, 0.14f, 0.14f);
+        collider.isTrigger = true;
+        Rigidbody body = gripObject.AddComponent<Rigidbody>();
+        body.useGravity = false;
+        body.isKinematic = true;
+        VRCPickup pickup = gripObject.AddComponent<VRCPickup>();
+        pickup.pickupable = true;
+        pickup.proximity = 3f;
+        GateballMalletGrip grip = gripObject.AddUdonSharpComponent<GateballMalletGrip>();
+        grip.Mallet = mallet;
+        grip.GripIndex = gripIndex;
+        return gripObject;
     }
 
     private static GameObject CreatePrimitive(string name, PrimitiveType type, Transform parent, Vector3 position, Vector3 scale, Material material, int layer)

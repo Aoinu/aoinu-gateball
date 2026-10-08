@@ -28,6 +28,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         [UdonSynced] public int StrokeBallId = -1;
         [UdonSynced] public Vector3 StrokeDirection;
         [UdonSynced] public float StrokeImpulse;
+        [UdonSynced] public Vector3 InitialLinearVelocity;
+        [UdonSynced] public Vector3 InitialAngularVelocity;
         [UdonSynced] public int FixedBallId = -1;
         [UdonSynced] public int SecondaryImpulseBallId = -1;
         [UdonSynced] public Vector3 SecondaryImpulseDirection;
@@ -68,6 +70,9 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
         private int _pendingStrokeBallId;
         private Vector3 _pendingStrokeDirection;
         private float _pendingStrokeImpulse;
+        private Vector3 _pendingInitialLinearVelocity;
+        private Vector3 _pendingInitialAngularVelocity;
+        private bool _pendingUsesInitialVelocities;
         private int _pendingFixedBallId = -1;
         private int _pendingSecondaryImpulseBallId = -1;
         private Vector3 _pendingSecondaryImpulseDirection;
@@ -197,6 +202,40 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 secondaryImpulse);
         }
 
+        public bool _RequestShotWithVelocities(
+            int ballId,
+            Vector3 initialLinearVelocity,
+            Vector3 initialAngularVelocity)
+        {
+            if (!GateballGeometry.IsValidBallId(ballId)
+                || Court == null
+                || Phase == PhaseSimulating
+                || !_IsSafeVelocity(initialLinearVelocity)
+                || !_IsSafeVelocity(initialAngularVelocity))
+            {
+                return false;
+            }
+
+            GateballBall ball = Court._GetBall(ballId);
+            if (ball == null || !ball._IsReady())
+            {
+                return false;
+            }
+
+            float impulse = initialLinearVelocity.magnitude * ball.Body.mass;
+            return _RequestShotInternal(
+                ballId,
+                initialLinearVelocity,
+                initialAngularVelocity,
+                GateballGeometry.NormalizeStrokeDirection(initialLinearVelocity),
+                impulse,
+                -1,
+                -1,
+                Vector3.zero,
+                0f,
+                true);
+        }
+
         private void _RequestStrokeInternal(
             int ballId,
             Vector3 direction,
@@ -206,23 +245,48 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             Vector3 secondaryImpulseDirection,
             float secondaryImpulse)
         {
+            _RequestShotInternal(
+                ballId,
+                Vector3.zero,
+                Vector3.zero,
+                direction,
+                impulse,
+                fixedBallId,
+                secondaryImpulseBallId,
+                secondaryImpulseDirection,
+                secondaryImpulse,
+                false);
+        }
+
+        private bool _RequestShotInternal(
+            int ballId,
+            Vector3 initialLinearVelocity,
+            Vector3 initialAngularVelocity,
+            Vector3 direction,
+            float impulse,
+            int fixedBallId,
+            int secondaryImpulseBallId,
+            Vector3 secondaryImpulseDirection,
+            float secondaryImpulse,
+            bool useInitialVelocities)
+        {
             if (Phase == PhaseSimulating || !GateballGeometry.IsValidBallId(ballId) || Court == null)
             {
-                return;
+                return false;
             }
 
             if ((fixedBallId >= 0 && !GateballGeometry.IsValidBallId(fixedBallId))
                 || (secondaryImpulseBallId >= 0 && !GateballGeometry.IsValidBallId(secondaryImpulseBallId))
                 || (secondaryImpulseBallId >= 0 && secondaryImpulseBallId == fixedBallId))
             {
-                return;
+                return false;
             }
 
             if (!_IsLocalOwner())
             {
                 if (Networking.LocalPlayer == null)
                 {
-                    return;
+                    return false;
                 }
 
                 _pendingStroke = true;
@@ -233,8 +297,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 _pendingSecondaryImpulseBallId = secondaryImpulseBallId;
                 _pendingSecondaryImpulseDirection = secondaryImpulseDirection;
                 _pendingSecondaryImpulse = secondaryImpulse;
+                _pendingInitialLinearVelocity = initialLinearVelocity;
+                _pendingInitialAngularVelocity = initialAngularVelocity;
+                _pendingUsesInitialVelocities = useInitialVelocities;
                 Networking.SetOwner(Networking.LocalPlayer, gameObject);
-                return;
+                return true;
             }
 
             _BeginShot(
@@ -244,7 +311,11 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 fixedBallId,
                 secondaryImpulseBallId,
                 secondaryImpulseDirection,
-                secondaryImpulse);
+                secondaryImpulse,
+                initialLinearVelocity,
+                initialAngularVelocity,
+                useInitialVelocities);
+            return true;
         }
 
         public override void OnDeserialization()
@@ -293,7 +364,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
                 _pendingFixedBallId,
                 _pendingSecondaryImpulseBallId,
                 _pendingSecondaryImpulseDirection,
-                _pendingSecondaryImpulse);
+                _pendingSecondaryImpulse,
+                _pendingInitialLinearVelocity,
+                _pendingInitialAngularVelocity,
+                _pendingUsesInitialVelocities);
         }
 
         public string _GetPhaseName()
@@ -384,7 +458,10 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             int fixedBallId,
             int secondaryImpulseBallId,
             Vector3 secondaryImpulseDirection,
-            float secondaryImpulse)
+            float secondaryImpulse,
+            Vector3 initialLinearVelocity,
+            Vector3 initialAngularVelocity,
+            bool useInitialVelocities)
         {
             if (!_IsLocalOwner() || Phase == PhaseSimulating || Court == null)
             {
@@ -395,8 +472,29 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             ShotId++;
             Phase = PhaseSimulating;
             StrokeBallId = ballId;
-            StrokeDirection = GateballGeometry.NormalizeStrokeDirection(direction);
-            StrokeImpulse = Mathf.Max(0f, impulse);
+            GateballBall strokeBall = Court._GetBall(ballId);
+            float ballMass = strokeBall == null || strokeBall.Body == null
+                ? GateballGeometry.BallMass
+                : Mathf.Max(0.0001f, strokeBall.Body.mass);
+            if (useInitialVelocities)
+            {
+                InitialLinearVelocity = initialLinearVelocity;
+                InitialAngularVelocity = initialAngularVelocity;
+            }
+            else
+            {
+                InitialLinearVelocity = GateballGeometry.NormalizeStrokeDirection(direction)
+                    * (Mathf.Max(0f, impulse) / ballMass);
+                float ballRadius = strokeBall == null ? GateballGeometry.BallRadius : strokeBall.Radius;
+                InitialAngularVelocity = GateballGeometry.CalculateRollingAngularVelocity(
+                    InitialLinearVelocity,
+                    Vector3.up,
+                    ballRadius,
+                    1f);
+            }
+
+            StrokeDirection = GateballGeometry.NormalizeStrokeDirection(InitialLinearVelocity);
+            StrokeImpulse = InitialLinearVelocity.magnitude * ballMass;
             FixedBallId = fixedBallId;
             SecondaryImpulseBallId = secondaryImpulseBallId;
             SecondaryImpulseDirection = GateballGeometry.NormalizeStrokeDirection(secondaryImpulseDirection);
@@ -604,6 +702,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             StrokeBallId = -1;
             StrokeDirection = Vector3.zero;
             StrokeImpulse = 0f;
+            InitialLinearVelocity = Vector3.zero;
+            InitialAngularVelocity = Vector3.zero;
             FixedBallId = -1;
             SecondaryImpulseBallId = -1;
             SecondaryImpulseDirection = Vector3.zero;
@@ -634,6 +734,8 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             StrokeBallId = -1;
             StrokeDirection = Vector3.zero;
             StrokeImpulse = 0f;
+            InitialLinearVelocity = Vector3.zero;
+            InitialAngularVelocity = Vector3.zero;
             FixedBallId = -1;
             SecondaryImpulseBallId = -1;
             SecondaryImpulseDirection = Vector3.zero;
@@ -684,7 +786,7 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
 
             if (strokeBall.BallId != FixedBallId)
             {
-                strokeBall._ApplyStroke(StrokeDirection, StrokeImpulse);
+                strokeBall._ApplyInitialVelocities(InitialLinearVelocity, InitialAngularVelocity);
             }
 
             if (secondaryBall != null)
@@ -746,6 +848,13 @@ namespace Pm.Booth.Aoinu607.Udon.Gateball
             _fixedShotBall = false;
             _fixedShotBallWasKinematic = false;
             _fixedShotBallId = -1;
+        }
+
+        private bool _IsSafeVelocity(Vector3 velocity)
+        {
+            return Mathf.Abs(velocity.x) < 100000f
+                && Mathf.Abs(velocity.y) < 100000f
+                && Mathf.Abs(velocity.z) < 100000f;
         }
 
         private void _TryApplyPendingShotStart()
